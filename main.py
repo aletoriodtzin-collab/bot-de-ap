@@ -277,7 +277,12 @@ class ConfirmarPartidaView(discord.ui.View):
                 item.disabled = True
             
             await interaction.response.edit_message(view=self)
-            await interaction.followup.send(embed=embed_pix)
+            
+            # Envia a chave Pix diretamente no tópico da partida
+            if isinstance(interaction.channel, discord.Thread):
+                await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
+            else:
+                await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -480,4 +485,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
+    
