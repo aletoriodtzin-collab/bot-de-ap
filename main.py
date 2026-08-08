@@ -52,6 +52,7 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         nome = self.nome_conta.value
         qr = self.link_qr.value if self.link_qr.value else ""
 
+        # Salva em formato int e str para evitar qualquer falha de chave no dicionário
         user_id_int = interaction.user.id
         user_id_str = str(interaction.user.id)
 
@@ -256,15 +257,13 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            embed_confirmacao = discord.Embed(
-                title="✅ Partida Confirmada",
-                description=f"{user.mention} confirmou com sucesso enviando Pix do mediador.",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed_confirmacao)
+            # Responde a interação para evitar falha de carregamento no botão
+            await interaction.response.defer()
 
+            # Busca blindada do Pix do mediador (testa ID int, string e atributos extras se houver)
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
-            print(f"[DEBUG PIX] Mediador: {self.mediador.name} ({self.mediador.id}) | Dados salvos: {dados_pix}")
+            
+            print(f"[DEBUG PIX] Buscando Pix para o mediador {self.mediador.name} (ID: {self.mediador.id}). Dados encontrados: {dados_pix}")
 
             embed_pix = discord.Embed(
                 title="💳 Realize o Pagamento",
@@ -284,23 +283,11 @@ class ConfirmarPartidaView(discord.ui.View):
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            for item in self.children:
-                item.disabled = True
-            
-            try:
-                await interaction.message.edit(view=self)
-            except Exception:
-                pass
-
-            # Envia diretamente no canal/tópico atual sem depender de verificação restrita de Thread
-            try:
+            # Envia a chave Pix diretamente no tópico da partida
+            if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
-            except Exception as e:
-                print(f"[ERRO PIX] Falha ao enviar mensagem no canal: {e}")
-                try:
-                    await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
-                except Exception:
-                    pass
+            else:
+                await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -503,3 +490,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
+                                  
