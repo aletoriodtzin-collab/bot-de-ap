@@ -11,9 +11,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
-# Seus emojis personalizados configurados
+# Todos os seus emojis personalizados configurados!
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
+EMOJI_BONECO   = "<:emoji_3:1535457054507139203>"
 
 # ------------------------------------------------------------------
 # Função que gera a Embed da Fila no Chat (Painel Público)
@@ -31,7 +32,7 @@ def criar_embed_fila():
     else:
         texto_jogadores = "\n".join([f"• {j.mention}" for j in fila_jogadores])
 
-    embed.add_field(name="👤 Jogadores", value=texto_jogadores, inline=False)
+    embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
@@ -46,7 +47,7 @@ def criar_embed_partida(jogadores, modo_gelo):
     )
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo de Jogo", value=f"{modo_gelo}", inline=False)
     embed.add_field(name=f"{EMOJI_DINHEIRO} Aposta", value="R$ 0,50", inline=False)
-    embed.add_field(name="👤 Jogadores", value=f"{j1.mention} vs {j2.mention}", inline=False)
+    embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=f"{j1.mention} vs {j2.mention}", inline=False)
     embed.add_field(name="🔥 Regra", value="Quem ganha come o BLUG comecem", inline=False)
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
@@ -98,7 +99,7 @@ class FilaView(discord.ui.View):
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             jogadores_partida = fila_jogadores.copy()
             
-            # 🔄 RESET AUTOMÁTICO: Zera a fila na memória imediatamente
+            # Reset automático da fila
             fila_jogadores.clear()
 
             # Reseta o painel público do chat para "Aguardando jogador..."
@@ -132,7 +133,7 @@ class FilaView(discord.ui.View):
                 embed=embed_partida
             )
         else:
-            # Caso ainda falte jogador (1/2), apenas atualiza a Embed no canal
+            # Caso falte jogador (1/2), apenas atualiza a Embed no canal
             embed_atualizado = criar_embed_fila()
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
@@ -161,4 +162,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
+            
