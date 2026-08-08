@@ -81,7 +81,7 @@ class PixView(discord.ui.View):
 @bot.tree.command(name="pix", description="Cadastre o seu Pix para receber os pagamentos das partidas")
 async def slash_pix(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="💳 Cadastro de Pix do Mediador",
+        title="❖ Cadastro de Pix do Mediador",
         description="Clique no botão abaixo para cadastrar o seu Pix. É para este Pix que os jogadores farão o pagamento das partidas que você mediar!",
         color=discord.Color.green()
     )
