@@ -53,12 +53,13 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         nome = self.nome_conta.value
         qr = self.link_qr.value if self.link_qr.value else ""
 
-        # Salva o Pix vinculado ao ID do mediador que preencheu
+        # Salva o Pix usando tanto o ID inteiro quanto string para garantir a leitura perfeita
         pix_mediadores[interaction.user.id] = {
             "nome": nome,
             "chave": chave,
             "qr": qr
         }
+        pix_mediadores[str(interaction.user.id)] = pix_mediadores[interaction.user.id]
 
         await interaction.response.send_message(
             f"✅ **Seu Pix foi cadastrado/atualizado com sucesso!**\n"
@@ -250,26 +251,23 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Busca os dados do Pix do mediador utilizando o ID correto
-            dados_pix = pix_mediadores.get(self.mediador.id)
+            # Busca garantida do Pix usando o ID do mediador responsável pela partida
+            dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
+
+            embed_pix = discord.Embed(
+                title="💳 Realize o Pagamento",
+                color=discord.Color.gold()
+            )
 
             if not dados_pix:
-                # Caso o mediador ainda não tenha cadastrado o Pix
-                embed_pix = discord.Embed(
-                    title="💳 Realize o Pagamento",
-                    description=f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar.",
-                    color=discord.Color.red()
-                )
+                embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar."
+                embed_pix.color = discord.Color.red()
             else:
-                # Exibe o Pix cadastrado pelo mediador no tópico
-                embed_pix = discord.Embed(
-                    title="💳 Realize o Pagamento",
-                    description="A partida foi confirmada! Faça o pagamento para o Pix do mediador abaixo:",
-                    color=discord.Color.gold()
-                )
-                embed_pix.add_field(name="Nome", value=dados_pix["nome"], inline=False)
-                embed_pix.add_field(name="Chave", value=f"```{dados_pix['chave']}```", inline=False)
+                embed_pix.description = "A partida foi confirmada! Faça o pagamento para o Pix do mediador abaixo:"
+                embed_pix.add_field(name="👤 Nome no Banco", value=dados_pix["nome"], inline=False)
+                embed_pix.add_field(name="🔑 Chave Pix", value=f"```{dados_pix['chave']}```", inline=False)
                 
+                # Se houver link de QR Code cadastrado, adiciona na imagem do Embed
                 if dados_pix.get("qr"):
                     embed_pix.set_image(url=dados_pix["qr"])
                     
@@ -341,7 +339,6 @@ class FilaView(discord.ui.View):
                 fila_jogadores.pop() 
                 return
 
-            # Pega o primeiro mediador e joga automaticamente para o final da fila (rotaciona)
             mediador = fila_mediadores.pop(0)
             fila_mediadores.append(mediador)
             await atualizar_painel_mediadores()
