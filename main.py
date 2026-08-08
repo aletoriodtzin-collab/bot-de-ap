@@ -14,7 +14,7 @@ TAMANHO_MAXIMO = 2  # 1v1
 # Todos os seus emojis personalizados configurados!
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
-EMOJI_BONECO   = "<:emoji_3:1535457054507139203>"
+EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 
 # ------------------------------------------------------------------
 # Função que gera a Embed da Fila no Chat (Painel Público)
@@ -162,4 +162,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-            
+    
