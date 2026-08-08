@@ -14,8 +14,8 @@ async def on_ready():
 
 # Lendo a variável TOKEN do Railway
 TOKEN = os.getenv("TOKEN")
+import os
 
-if not TOKEN:
-    raise ValueError("❌ ERRO: A variável de ambiente 'TOKEN' não foi encontrada no Railway!")
+TOKEN = os.getenv("TOKEN")
+bot.run(MTUzNTQyMTk3MTEwNDUzNDY3MQ.Gh8Jr8.hvMyoHkB6tbqSz_q3mROrEgoUlZyT2l5bOTsis)
 
-bot.run("MTUzNTQyMTk3MTEwNDUzNDY3MQ.Gh8Jr8.hvMyoHkB6tbqSz_q3mROrEgoUlZyT2l5bOTsis")
