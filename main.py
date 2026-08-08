@@ -11,11 +11,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
-# Seu emoji personalizado configurado
+# Seus emojis personalizados configurados
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
+EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 
 # ------------------------------------------------------------------
-# Função que gera a Embed da Fila no Chat (Verde + Emoji Customizado)
+# Função que gera a Embed da Fila no Chat (Painel Público)
 # ------------------------------------------------------------------
 def criar_embed_fila():
     embed = discord.Embed(
@@ -23,7 +24,7 @@ def criar_embed_fila():
         color=discord.Color.green()  # Barra verde na lateral
     )
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value="1x1 Mobile", inline=False)
-    embed.add_field(name="💰 Valor", value="R$ 0,50", inline=False)
+    embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value="R$ 0,50", inline=False)
 
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
@@ -35,16 +36,16 @@ def criar_embed_fila():
     return embed
 
 # ------------------------------------------------------------------
-# Função que gera a Embed do Tópico Privado (Verde + Emoji Customizado)
+# Função que gera a Embed para o Tópico Privado da Partida
 # ------------------------------------------------------------------
 def criar_embed_partida(jogadores, modo_gelo):
     j1, j2 = jogadores[0], jogadores[1]
     embed = discord.Embed(
         title="⚔️ Partida Confirmada — 1x1",
-        color=discord.Color.green()  # Barra verde na lateral
+        color=discord.Color.green()
     )
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo de Jogo", value=f"{modo_gelo}", inline=False)
-    embed.add_field(name="💰 Aposta", value="R$ 0,50", inline=False)
+    embed.add_field(name=f"{EMOJI_DINHEIRO} Aposta", value="R$ 0,50", inline=False)
     embed.add_field(name="👤 Jogadores", value=f"{j1.mention} vs {j2.mention}", inline=False)
     embed.add_field(name="🔥 Regra", value="Quem ganha come o BLUG comecem", inline=False)
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
@@ -92,23 +93,22 @@ class FilaView(discord.ui.View):
             return
 
         fila_jogadores.append(user)
-        embed_atualizado = criar_embed_fila()
-
-        await interaction.response.edit_message(embed=embed_atualizado, view=self)
-        await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
         # Quando lotar a fila (2/2)
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             jogadores_partida = fila_jogadores.copy()
+            
+            # 🔄 RESET AUTOMÁTICO: Zera a fila na memória imediatamente
             fila_jogadores.clear()
 
-            # Reseta o painel público
-            await interaction.message.edit(embed=criar_embed_fila(), view=self)
+            # Reseta o painel público do chat para "Aguardando jogador..."
+            await interaction.response.edit_message(embed=criar_embed_fila(), view=self)
+            await interaction.followup.send(f"✅ Fila lotada! Criando partida...", ephemeral=True)
 
             channel = interaction.channel
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
 
-            # Cria o tópico privado no canal
+            # Criar o tópico privado para a partida
             try:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
@@ -121,14 +121,21 @@ class FilaView(discord.ui.View):
                     auto_archive_duration=60
                 )
 
+            # Adiciona os 2 jogadores no tópico privado
             await topico.add_user(j1)
             await topico.add_user(j2)
 
+            # Envia a embed bonita dentro do tópico privado
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention}",
                 embed=embed_partida
             )
+        else:
+            # Caso ainda falte jogador (1/2), apenas atualiza a Embed no canal
+            embed_atualizado = criar_embed_fila()
+            await interaction.response.edit_message(embed=embed_atualizado, view=self)
+            await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
 # ------------------------------------------------------------------
 # Evento e Comando principal
