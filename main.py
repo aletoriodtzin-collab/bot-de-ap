@@ -1,4 +1,5 @@
 import os
+import asyncio
 import discord
 from discord.ext import commands
 
@@ -193,7 +194,10 @@ class FilaView(discord.ui.View):
             await topico.add_user(j1)
             await topico.add_user(j2)
 
-            # Deleta as mensagens automáticas de sistema do Discord (ex: "fulano adicionou beltrano")
+            # Aguarda meio segundo para o Discord injetar as mensagens de sistema no canal
+            await asyncio.sleep(0.5)
+
+            # Deleta todas as mensagens que não são padrão (avisos de sistema de adição de membros)
             try:
                 async for mensagem in topico.history(limit=10):
                     if mensagem.type != discord.MessageType.default:
@@ -240,4 +244,3 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
