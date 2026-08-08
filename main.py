@@ -193,6 +193,14 @@ class FilaView(discord.ui.View):
             await topico.add_user(j1)
             await topico.add_user(j2)
 
+            # Deleta as mensagens automáticas de sistema do Discord (ex: "fulano adicionou beltrano")
+            try:
+                async for mensagem in topico.history(limit=10):
+                    if mensagem.type != discord.MessageType.default:
+                        await mensagem.delete()
+            except Exception:
+                pass
+
             # Envia a embed bonita e os botões de confirmação dentro do tópico
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
             view_confirmacao = ConfirmarPartidaView(jogadores_partida)
