@@ -18,4 +18,4 @@ TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise ValueError("❌ ERRO: A variável de ambiente 'TOKEN' não foi encontrada no Railway!")
 
-bot.run("f5244c878494111ea81468c378c7ec108ba63b86f97d576a6730bf78cdb119bb")
+bot.run("MTUzNTQyMTk3MTEwNDUzNDY3MQ.Gh8Jr8.hvMyoHkB6tbqSz_q3mROrEgoUlZyT2l5bOTsis")
