@@ -250,18 +250,18 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Verifica se o mediador cadastrou o Pix dele
+            # Busca os dados do Pix do mediador utilizando o ID correto
             dados_pix = pix_mediadores.get(self.mediador.id)
 
             if not dados_pix:
-                # Caso o mediador não tenha cadastrado o Pix
+                # Caso o mediador ainda não tenha cadastrado o Pix
                 embed_pix = discord.Embed(
                     title="💳 Realize o Pagamento",
                     description=f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar.",
                     color=discord.Color.red()
                 )
             else:
-                # Envia exatamente o Pix do mediador que assumiu a partida
+                # Exibe o Pix cadastrado pelo mediador no tópico
                 embed_pix = discord.Embed(
                     title="💳 Realize o Pagamento",
                     description="A partida foi confirmada! Faça o pagamento para o Pix do mediador abaixo:",
@@ -270,7 +270,7 @@ class ConfirmarPartidaView(discord.ui.View):
                 embed_pix.add_field(name="Nome", value=dados_pix["nome"], inline=False)
                 embed_pix.add_field(name="Chave", value=f"```{dados_pix['chave']}```", inline=False)
                 
-                if dados_pix["qr"]:
+                if dados_pix.get("qr"):
                     embed_pix.set_image(url=dados_pix["qr"])
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
@@ -483,4 +483,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-            
+        
