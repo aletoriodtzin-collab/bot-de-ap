@@ -2,9 +2,9 @@ import os
 import discord
 from discord.ext import commands
 
-# Configuração dos intents necessários para o bot
+# Configuração dos intents do bot
 intents = discord.Intents.default()
-intents.message_content = True  # Ative no Discord Dev Portal em 'Bot' -> 'Message Content Intent'
+intents.message_content = True  # Lembre-se de ativar essa permissão no Discord Developer Portal
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -12,10 +12,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"✅ Bot online com sucesso como: {bot.user}")
 
-# Lendo a variável TOKEN do Railway
+# Pega o token configurado nas variáveis do Railway
 TOKEN = os.getenv("TOKEN")
-import os
 
-TOKEN = os.getenv("TOKEN")
-bot.run(MTUzNTQyMTk3MTEwNDUzNDY3MQ.Gh8Jr8.hvMyoHkB6tbqSz_q3mROrEgoUlZyT2l5bOTsis)
-
+if not TOKEN:
+    print("❌ ERRO: A variável 'TOKEN' não foi encontrada nas variáveis de ambiente do Railway!")
+else:
+    bot.run(TOKEN)
+    
