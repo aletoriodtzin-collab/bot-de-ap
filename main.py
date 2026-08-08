@@ -124,7 +124,6 @@ class ConfirmarPartidaView(discord.ui.View):
 
         self.confirmados.add(user.id)
 
-        # Responde imediatamente para evitar "Aplicativo não respondeu"
         await interaction.response.defer()
 
         if len(self.confirmados) < len(self.jogadores):
@@ -143,7 +142,6 @@ class ConfirmarPartidaView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             
-            # Edita a mensagem original desativando os botões corretamente
             await interaction.message.edit(view=self)
             await interaction.followup.send(embed=embed_final)
 
@@ -251,11 +249,6 @@ class FilaView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f"✅ Bot online com sucesso como: {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"🔄 Comandos Slash sincronizados: {len(synced)}")
-    except Exception as e:
-        print(f"❌ Erro ao sincronizar comandos slash: {e}")
 
 @bot.command(name="fila")
 async def gerar_fila(ctx):
@@ -268,9 +261,14 @@ async def gerar_fila(ctx):
     view = FilaView()
     await ctx.send(embed=embed, view=view)
 
-# Comando Slash /pix corrigido para não dar erro de tempo limite
-@bot.tree.command(name="pix", description="Cadastre sua chave Pix para receber pagamentos.")
-async def slash_pix(interaction: discord.Interaction):
+# Comando de texto !pix
+@bot.command(name="pix")
+async def comando_pix(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
     embed = discord.Embed(
         title="💳 Cadastro de Chave Pix",
         description="clique aqui para cadastrar seu Pix, pois se não cadastrar não terá como o cliente saber sua chave.",
@@ -279,7 +277,7 @@ async def slash_pix(interaction: discord.Interaction):
     embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png") # Altere para o link do seu Banner se desejar
     
     view = PixView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await ctx.send(embed=embed, view=view)
 
 TOKEN = os.getenv("TOKEN")
 
@@ -287,4 +285,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+                
