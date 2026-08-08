@@ -88,7 +88,8 @@ async def slash_pix(interaction: discord.Interaction):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    # Alterado para público (ephemeral=False) conforme solicitado
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
 # SISTEMA DE SUPORTE / MODERAÇÃO (TÓPICO PÚBLICO)
@@ -381,24 +382,48 @@ async def slash_fila(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view)
 
 # ------------------------------------------------------------------
-# NOVO COMANDO: /criar_15_filas
+# NOVO COMANDO: /criar_15_filas (Corrigido com View/Select separado)
 # ------------------------------------------------------------------
-class ModalCriarFilas(discord.ui.Modal, title="Configurar 15 Filas"):
-    canais_input = discord.ui.TextInput(
-        label="IDs dos 5 canais (separados por vírgula)",
-        placeholder="Ex: 123456789, 987654321...",
-        style=discord.TextStyle.paragraph,
-        required=True
-    )
-    
-    modo_select = discord.ui.Select(
-        placeholder="Escolha o modo",
-        options=[
+class SelectModoFila(discord.ui.Select):
+    def __init__(self, canais_ids, valores):
+        self.canais_ids = canais_ids
+        self.valores = valores
+        options = [
             discord.SelectOption(label="4v4", value="4v4"),
             discord.SelectOption(label="3v3", value="3v3"),
             discord.SelectOption(label="2v2", value="2v2"),
             discord.SelectOption(label="1v1", value="1v1"),
         ]
+        super().__init__(placeholder="Escolha o modo de jogo para as filas", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        modo = self.values[0]
+        await interaction.response.edit_message(content=f"⚙️ Gerando as 15 filas no modo **{modo}**, por favor aguarde...", view=None)
+
+        valor_atual_idx = 0
+        for canal_id in self.canais_ids:
+            canal = interaction.guild.get_channel(int(canal_id))
+            if canal:
+                for _ in range(3):
+                    val = self.valores[valor_atual_idx % len(self.valores)]
+                    embed = criar_embed_fila(modo_jogo=modo, valor_aposta=f"R$ {val}")
+                    view = FilaView()
+                    await canal.send(embed=embed, view=view)
+                    valor_atual_idx += 1
+
+        await interaction.followup.send("✅ As 15 filas foram criadas com sucesso nos canais!", ephemeral=True)
+
+class ViewSelecaoModo(discord.ui.View):
+    def __init__(self, canais_ids, valores):
+        super().__init__(timeout=60)
+        self.add_item(SelectModoFila(canais_ids, valores))
+
+class ModalCriarFilas(discord.ui.Modal, title="Configurar 15 Filas"):
+    canais_input = discord.ui.TextInput(
+        label="IDs dos até 5 canais (separados por vírgula)",
+        placeholder="Ex: 123456789, 987654321...",
+        style=discord.TextStyle.paragraph,
+        required=True
     )
 
     valores_input = discord.ui.TextInput(
@@ -408,45 +433,27 @@ class ModalCriarFilas(discord.ui.Modal, title="Configurar 15 Filas"):
         required=True
     )
 
-    def __init__(self):
-        super().__init__()
-        self.add_item(self.modo_select)
-
     async def on_submit(self, interaction: discord.Interaction):
-        canais_ids = [c.strip() for c in self.canais_input.value.split(",")]
-        valores = [v.strip() for v in self.valores_input.value.split(",")]
-        modo = self.modo_select.values[0]
+        try:
+            canais_ids = [c.strip() for c in self.canais_input.value.split(",")]
+            valores = [v.strip() for v in self.valores_input.value.split(",")]
 
-        if len(canais_ids) > 5:
-            await interaction.response.send_message("❌ Você pode selecionar no máximo 5 canais!", ephemeral=True)
-            return
+            if len(canais_ids) > 5:
+                await interaction.response.send_message("❌ Você pode selecionar no máximo 5 canais!", ephemeral=True)
+                return
 
-        await interaction.response.send_message("⚙️ Gerando as filas nos canais selecionados...", ephemeral=True)
-
-        valor_atual_idx = 0
-        for canal_id in canais_ids:
-            try:
-                canal = interaction.guild.get_channel(int(canal_id))
-            except Exception:
-                canal = None
-
-            if canal:
-                # Cria 3 filas em cada um dos 5 canais (totalizando 15)
-                for _ in range(3):
-                    val = valores[valor_atual_idx % len(valores)]
-                    embed = criar_embed_fila(modo_jogo=modo, valor_aposta=f"R$ {val}")
-                    view = FilaView()
-                    await canal.send(embed=embed, view=view)
-                    valor_atual_idx += 1
-            else:
-                await interaction.followup.send(f"❌ Não foi possível encontrar o canal com ID: {canal_id}", ephemeral=True)
+            # Envia uma mensagem com o menu Select para escolher o modo (solução correta do Discord)
+            view = ViewSelecaoModo(canais_ids, valores)
+            await interaction.response.send_message("🎮 Agora escolha abaixo o **modo de jogo** para gerar as filas:", view=view, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Ocorreu um erro ao processar os dados: {e}", ephemeral=True)
 
 @bot.tree.command(name="criar_15_filas", description="Gera 15 filas distribuídas em até 5 canais")
 async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_modal(ModalCriarFilas())
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!sala_criada) - MANTIDO EM PREFIXO
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!sala_criada)
 # ------------------------------------------------------------------
 class PainelMediadorModal(discord.ui.Modal, title="Painel de Controle da Partida"):
     escolha_vencedor_input = discord.ui.TextInput(
