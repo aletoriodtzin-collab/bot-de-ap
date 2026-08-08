@@ -15,6 +15,7 @@ TAMANHO_MAXIMO = 2  # 1v1
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
+EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
 # ------------------------------------------------------------------
 # Função que gera a Embed da Fila no Chat (Painel Público)
@@ -60,12 +61,12 @@ class FilaView(discord.ui.View):
         super().__init__(timeout=None)
 
     # Botão: Gelo Normal
-    @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji="🧊")
+    @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Normal")
 
     # Botão: Gelo Infinito
-    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji="🧊")
+    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Infinito")
 
@@ -162,4 +163,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+        
