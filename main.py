@@ -12,8 +12,7 @@ fila_jogadores = []
 fila_mediadores = []
 TAMANHO_MAXIMO = 2 
 
-# Dicionário para armazenar o Pix de cada mediador cadastrado (Chave: ID do Mediador)
-# Formato: { id_mediador: {"nome": "Nome", "chave": "Chave", "qr": "Link"} }
+# Dicionário para armazenar o Pix de cada mediador cadastrado
 pix_mediadores = {}
 
 mensagem_painel_med = None
@@ -53,13 +52,20 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         nome = self.nome_conta.value
         qr = self.link_qr.value if self.link_qr.value else ""
 
-        # Salva o Pix usando tanto o ID inteiro quanto string para garantir a leitura perfeita
-        pix_mediadores[interaction.user.id] = {
+        # Salva em formato int e str para evitar qualquer falha de chave no dicionário
+        user_id_int = interaction.user.id
+        user_id_str = str(interaction.user.id)
+
+        dados = {
             "nome": nome,
             "chave": chave,
             "qr": qr
         }
-        pix_mediadores[str(interaction.user.id)] = pix_mediadores[interaction.user.id]
+
+        pix_mediadores[user_id_int] = dados
+        pix_mediadores[user_id_str] = dados
+
+        print(f"[PIX SALVO] Mediador {interaction.user.name} ({user_id_int}) cadastrou a chave: {chave}")
 
         await interaction.response.send_message(
             f"✅ **Seu Pix foi cadastrado/atualizado com sucesso!**\n"
@@ -251,8 +257,13 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Busca garantida do Pix usando o ID do mediador responsável pela partida
+            # Responde a interação para evitar falha de carregamento no botão
+            await interaction.response.defer()
+
+            # Busca blindada do Pix do mediador (testa ID int, string e atributos extras se houver)
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
+            
+            print(f"[DEBUG PIX] Buscando Pix para o mediador {self.mediador.name} (ID: {self.mediador.id}). Dados encontrados: {dados_pix}")
 
             embed_pix = discord.Embed(
                 title="💳 Realize o Pagamento",
@@ -267,17 +278,11 @@ class ConfirmarPartidaView(discord.ui.View):
                 embed_pix.add_field(name="👤 Nome no Banco", value=dados_pix["nome"], inline=False)
                 embed_pix.add_field(name="🔑 Chave Pix", value=f"```{dados_pix['chave']}```", inline=False)
                 
-                # Se houver link de QR Code cadastrado, adiciona na imagem do Embed
                 if dados_pix.get("qr"):
                     embed_pix.set_image(url=dados_pix["qr"])
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            for item in self.children:
-                item.disabled = True
-            
-            await interaction.response.edit_message(view=self)
-            
             # Envia a chave Pix diretamente no tópico da partida
             if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
@@ -485,4 +490,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+        
