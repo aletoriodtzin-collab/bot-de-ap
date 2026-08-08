@@ -17,8 +17,7 @@ EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
-# Dicionário temporário para salvar as chaves pix dos usuários (em memória)
-# Estrutura: {user_id: {"chave": "...", "qrcode": "..."}}
+# Dicionário para salvar as chaves pix dos usuários
 dados_pix = {}
 
 # ------------------------------------------------------------------
@@ -40,7 +39,6 @@ class PixModal(discord.ui.Modal, title="Cadastrar Chave Pix"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Salva os dados do usuário no dicionário
         dados_pix[interaction.user.id] = {
             "chave": self.chave_pix.value,
             "qrcode": self.link_qrcode.value
@@ -65,7 +63,6 @@ class PixView(discord.ui.View):
 
     @discord.ui.button(label="clique aqui para cadastrar", style=discord.ButtonStyle.secondary, emoji="❖")
     async def cadastrar_pix(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Abre o modal para o usuário preencher
         await interaction.response.send_modal(PixModal())
 
 # ------------------------------------------------------------------
@@ -127,13 +124,16 @@ class ConfirmarPartidaView(discord.ui.View):
 
         self.confirmados.add(user.id)
 
+        # Responde imediatamente para evitar "Aplicativo não respondeu"
+        await interaction.response.defer()
+
         if len(self.confirmados) < len(self.jogadores):
             embed_confirmacao = discord.Embed(
                 title="✅ Partida Confirmada",
                 description=f"{user.mention} confirmou a aposta!\nO outro jogador precisa confirmar para continuar.",
                 color=discord.Color.green()
             )
-            await interaction.response.send_message(embed=embed_confirmacao)
+            await interaction.followup.send(embed=embed_confirmacao)
         else:
             embed_final = discord.Embed(
                 title="🚀 Ambos Confirmaram!",
@@ -143,7 +143,8 @@ class ConfirmarPartidaView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             
-            await interaction.response.edit_message(view=self)
+            # Edita a mensagem original desativando os botões corretamente
+            await interaction.message.edit(view=self)
             await interaction.followup.send(embed=embed_final)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
@@ -154,6 +155,8 @@ class ConfirmarPartidaView(discord.ui.View):
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
 
+        await interaction.response.defer()
+
         for item in self.children:
             item.disabled = True
 
@@ -162,7 +165,7 @@ class ConfirmarPartidaView(discord.ui.View):
             description=f"{user.mention} cancelou a partida.",
             color=discord.Color.red()
         )
-        await interaction.response.edit_message(view=self)
+        await interaction.message.edit(view=self)
         await interaction.followup.send(embed=embed_cancelado)
 
 # ------------------------------------------------------------------
@@ -265,12 +268,12 @@ async def gerar_fila(ctx):
     view = FilaView()
     await ctx.send(embed=embed, view=view)
 
-# Comando Slash /pix
+# Comando Slash /pix corrigido para não dar erro de tempo limite
 @bot.tree.command(name="pix", description="Cadastre sua chave Pix para receber pagamentos.")
 async def slash_pix(interaction: discord.Interaction):
     embed = discord.Embed(
         title="💳 Cadastro de Chave Pix",
-        description="Clique no botão abaixo para cadastrar seu Pix, pois se não cadastrar não terá como o cliente saber sua chave.",
+        description="clique aqui para cadastrar seu Pix, pois se não cadastrar não terá como o cliente saber sua chave.",
         color=discord.Color.blue()
     )
     embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png") # Altere para o link do seu Banner se desejar
