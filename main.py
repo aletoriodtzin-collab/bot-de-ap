@@ -23,7 +23,7 @@ EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 def criar_embed_fila():
     embed = discord.Embed(
         title="➔ 1x1 — Fila de Partida",
-        color=discord.Color.green()  # Barra verde na lateral
+        color=discord.Color.green()
     )
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value="1x1 Mobile", inline=False)
     embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value="R$ 0,50", inline=False)
@@ -54,7 +54,73 @@ def criar_embed_partida(jogadores, modo_gelo):
     return embed
 
 # ------------------------------------------------------------------
-# Botões interativos do painel
+# View dos Botões de Confirmação no Tópico Privado
+# ------------------------------------------------------------------
+class ConfirmarPartidaView(discord.ui.View):
+    def __init__(self, jogadores):
+        super().__init__(timeout=None)
+        self.jogadores = jogadores
+        self.confirmados = set()
+
+    @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
+    async def continuar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+
+        # Apenas os 2 jogadores da partida podem clicar
+        if user not in self.jogadores:
+            await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
+            return
+
+        if user.id in self.confirmados:
+            await interaction.response.send_message("⚠️ Você já confirmou!", ephemeral=True)
+            return
+
+        self.confirmados.add(user.id)
+
+        # Se apenas 1 confirmou por enquanto
+        if len(self.confirmados) < len(self.jogadores):
+            embed_confirmacao = discord.Embed(
+                title="✅ Partida Confirmada",
+                description=f"{user.mention} confirmou a aposta!\nO outro jogador precisa confirmar para continuar.",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed_confirmacao)
+        else:
+            # Os 2 jogares confirmaram!
+            embed_final = discord.Embed(
+                title="🚀 Ambos Confirmaram!",
+                description="Todos os jogadores confirmaram! A partida está liberada. Boa sorte!",
+                color=discord.Color.green()
+            )
+            # Desativa os botões para ninguém clicar de novo
+            for item in self.children:
+                item.disabled = True
+            
+            await interaction.response.edit_message(view=self)
+            await interaction.followup.send(embed=embed_final)
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
+    async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+
+        if user not in self.jogadores:
+            await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
+            return
+
+        # Desativa os botões
+        for item in self.children:
+            item.disabled = True
+
+        embed_cancelado = discord.Embed(
+            title="❌ Partida Cancelada",
+            description=f"{user.mention} cancelou a partida.",
+            color=discord.Color.red()
+        )
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(embed=embed_cancelado)
+
+# ------------------------------------------------------------------
+# Botões interativos do painel principal (Fila)
 # ------------------------------------------------------------------
 class FilaView(discord.ui.View):
     def __init__(self):
@@ -127,11 +193,14 @@ class FilaView(discord.ui.View):
             await topico.add_user(j1)
             await topico.add_user(j2)
 
-            # Envia a embed bonita dentro do tópico privado
+            # Envia a embed bonita e os botões de confirmação dentro do tópico
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
+            view_confirmacao = ConfirmarPartidaView(jogadores_partida)
+
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention}",
-                embed=embed_partida
+                embed=embed_partida,
+                view=view_confirmacao
             )
         else:
             # Caso falte jogador (1/2), apenas atualiza a Embed no canal
@@ -163,4 +232,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
+            
