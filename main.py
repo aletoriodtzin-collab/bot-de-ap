@@ -11,6 +11,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
+# Fila de mediadores na memória (armazena os objetos User/Member)
+fila_mediadores = []
+
 # Todos os seus emojis personalizados configurados!
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
@@ -64,6 +67,55 @@ class PixView(discord.ui.View):
     @discord.ui.button(label="clique aqui para cadastrar", style=discord.ButtonStyle.secondary, emoji="❖")
     async def cadastrar_pix(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(PixModal())
+
+# ------------------------------------------------------------------
+# Função que gera a Embed da Fila de Mediadores
+# ------------------------------------------------------------------
+def criar_embed_med():
+    embed = discord.Embed(
+        title="🛡️ Fila Mediador",
+        description="Essa fila mediador serve pra você conseguir atender os clientes, sem ela você não vai ser marcado.",
+        color=discord.Color.blue()
+    )
+
+    if not fila_mediadores:
+        texto_med = "*Nenhum mediador na fila...*"
+    else:
+        texto_med = "\n".join([f"{i+1}-{m.mention}" for i, m in enumerate(fila_mediadores)])
+
+    embed.add_field(name="📋 Mediadores", value=texto_med, inline=False)
+    embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
+    return embed
+
+# ------------------------------------------------------------------
+# View dos Botões da Fila de Mediadores
+# ------------------------------------------------------------------
+class MedView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Entrar na Fila", style=discord.ButtonStyle.success, emoji="✅")
+    async def entrar_med(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if user in fila_mediadores:
+            await interaction.response.send_message("⚠️ Você já está na fila de mediadores!", ephemeral=True)
+            return
+        
+        fila_mediadores.append(user)
+        embed_atualizado = criar_embed_med()
+        await interaction.response.edit_message(embed=embed_atualizado, view=self)
+        await interaction.followup.send(f"✅ {user.mention} entrou na fila de mediadores!", ephemeral=True)
+
+    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="❌")
+    async def sair_med(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if user in fila_mediadores:
+            fila_mediadores.remove(user)
+            embed_atualizado = criar_embed_med()
+            await interaction.response.edit_message(embed=embed_atualizado, view=self)
+            await interaction.followup.send(f"🚪 {user.mention} saiu da fila de mediadores.", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Você não está na fila de mediadores!", ephemeral=True)
 
 # ------------------------------------------------------------------
 # Função que gera a Embed da Fila no Chat (Painel Público)
@@ -261,7 +313,6 @@ async def gerar_fila(ctx):
     view = FilaView()
     await ctx.send(embed=embed, view=view)
 
-# Comando de texto !pix
 @bot.command(name="pix")
 async def comando_pix(ctx):
     try:
@@ -274,9 +325,21 @@ async def comando_pix(ctx):
         description="clique aqui para cadastrar seu Pix, pois se não cadastrar não terá como o cliente saber sua chave.",
         color=discord.Color.blue()
     )
-    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png") # Altere para o link do seu Banner se desejar
+    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
     
     view = PixView()
+    await ctx.send(embed=embed, view=view)
+
+# Novo Comando !med para a Fila de Mediadores
+@bot.command(name="med")
+async def comando_med(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    embed = criar_embed_med()
+    view = MedView()
     await ctx.send(embed=embed, view=view)
 
 TOKEN = os.getenv("TOKEN")
@@ -285,4 +348,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-                
+    
