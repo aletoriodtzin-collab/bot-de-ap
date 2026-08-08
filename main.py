@@ -384,6 +384,50 @@ class FilaView(discord.ui.View):
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
+# ------------------------------------------------------------------
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!sala_criada)
+# ------------------------------------------------------------------
+class PainelMediadorView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Escolha o vencedor", style=discord.ButtonStyle.primary, emoji="🏆", row=0)
+    async def escolha_vencedor(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🏆 Funcionalidade de escolher o vencedor acionada.", ephemeral=True)
+
+    @discord.ui.button(label="Vitória por W.O", style=discord.ButtonStyle.danger, emoji="⚠️", row=1)
+    async def vitoria_wo(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("⚠️ Partida encerrada por W.O.", ephemeral=True)
+
+    @discord.ui.button(label="Dar Win", style=discord.ButtonStyle.success, emoji="✅", row=1)
+    async def dar_win(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("✅ Win computada para o jogador.", ephemeral=True)
+
+    @discord.ui.button(label="Reembolsar", style=discord.ButtonStyle.secondary, emoji="💸", row=1)
+    async def reembolsar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("💸 Partida marcada para reembolso.", ephemeral=True)
+
+@bot.command(name="sala_criada")
+async def sala_criada(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    if not isinstance(ctx.channel, discord.Thread):
+        await ctx.send("❌ Este comando só pode ser utilizado dentro do tópico da partida!", delete_after=5)
+        return
+
+    embed = discord.Embed(
+        title="⚙️ Painel de Controle da Partida",
+        description="Utilize os botões abaixo para gerenciar o desfecho da partida:",
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text="Painel exclusivo para controle do Mediador.")
+
+    view = PainelMediadorView()
+    await ctx.send(embed=embed, view=view)
+
 @bot.event
 async def on_ready():
     print(f"✅ Bot online com sucesso como: {bot.user}")
@@ -405,4 +449,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+            
