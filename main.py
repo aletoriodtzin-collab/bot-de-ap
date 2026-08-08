@@ -52,7 +52,6 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         nome = self.nome_conta.value
         qr = self.link_qr.value if self.link_qr.value else ""
 
-        # Salva em formato int e str para evitar qualquer falha de chave no dicionário
         user_id_int = interaction.user.id
         user_id_str = str(interaction.user.id)
 
@@ -64,8 +63,6 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
 
         pix_mediadores[user_id_int] = dados
         pix_mediadores[user_id_str] = dados
-
-        print(f"[PIX SALVO] Mediador {interaction.user.name} ({user_id_int}) cadastrou a chave: {chave}")
 
         await interaction.response.send_message(
             f"✅ **Seu Pix foi cadastrado/atualizado com sucesso!**\n"
@@ -100,7 +97,7 @@ async def gerar_pix(ctx):
     await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
-# SISTEMA DE SUPORTE / MODERAÇÃO (!med suporte)
+# SISTEMA DE SUPORTE / MODERAÇÃO (!med suporte) - TÓPICO PÚBLICO
 # ------------------------------------------------------------------
 class TicketModView(discord.ui.View):
     def __init__(self):
@@ -114,7 +111,7 @@ class TicketModView(discord.ui.View):
         try:
             topico = await channel.create_thread(
                 name=f"🛡️-suporte-{user.name}",
-                type=discord.ChannelType.private_thread,
+                type=discord.ChannelType.public_thread,
                 auto_archive_duration=60
             )
         except Exception:
@@ -257,13 +254,18 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Responde a interação para evitar falha de carregamento no botão
+            # Desativa os botões da mensagem de confirmação para evitar cliques duplos
+            for item in self.children:
+                item.disabled = True
+            try:
+                await interaction.message.edit(view=self)
+            except Exception:
+                pass
+
             await interaction.response.defer()
 
-            # Busca blindada do Pix do mediador (testa ID int, string e atributos extras se houver)
+            # Busca blindada do Pix do mediador
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
-            
-            print(f"[DEBUG PIX] Buscando Pix para o mediador {self.mediador.name} (ID: {self.mediador.id}). Dados encontrados: {dados_pix}")
 
             embed_pix = discord.Embed(
                 title="💳 Realize o Pagamento",
@@ -274,7 +276,7 @@ class ConfirmarPartidaView(discord.ui.View):
                 embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar."
                 embed_pix.color = discord.Color.red()
             else:
-                embed_pix.description = "A partida foi confirmada! Faça o pagamento para o Pix do mediador abaixo:"
+                embed_pix.description = "Ambos os jogadores confirmaram! Faça o pagamento para o Pix do mediador abaixo:"
                 embed_pix.add_field(name="👤 Nome no Banco", value=dados_pix["nome"], inline=False)
                 embed_pix.add_field(name="🔑 Chave Pix", value=f"```{dados_pix['chave']}```", inline=False)
                 
@@ -283,7 +285,7 @@ class ConfirmarPartidaView(discord.ui.View):
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            # Envia a chave Pix diretamente no tópico da partida
+            # Envia a chave Pix automaticamente no tópico público da partida
             if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
             else:
@@ -365,7 +367,7 @@ class FilaView(discord.ui.View):
             try:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
-                    type=discord.ChannelType.private_thread,
+                    type=discord.ChannelType.public_thread,
                     auto_archive_duration=60
                 )
             except Exception:
@@ -490,4 +492,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-                                  
+    
