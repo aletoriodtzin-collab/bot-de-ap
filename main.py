@@ -90,59 +90,7 @@ async def gerar_pix(ctx):
     await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
-# SISTEMA DE SUPORTE / MODERAÇÃO (!med)
-# ------------------------------------------------------------------
-class TicketModView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Chamar Moderação", style=discord.ButtonStyle.primary, emoji="🛡️")
-    async def chamar_moderacao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        channel = interaction.channel
-
-        try:
-            topico = await channel.create_thread(
-                name=f"🛡️-suporte-{user.name}",
-                type=discord.ChannelType.private_thread,
-                auto_archive_duration=60
-            )
-        except Exception:
-            topico = await channel.create_thread(
-                name=f"🛡️-suporte-{user.name}",
-                auto_archive_duration=60
-            )
-
-        await topico.add_user(user)
-
-        embed_ticket = discord.Embed(
-            title="🛡️ Atendimento com a Moderação",
-            description=f"Olá {user.mention}! Um moderador irá te atender em breve.\nDescreva o seu problema ou envie as provas necessárias aqui.",
-            color=discord.Color.blue()
-        )
-
-        await topico.send(content=f"🔔 {user.mention}", embed=embed_ticket)
-        await interaction.response.send_message(f"✅ Seu ticket de atendimento foi criado com sucesso: {topico.mention}", ephemeral=True)
-
-@bot.command(name="med")
-async def painel_med(ctx):
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    embed = discord.Embed(
-        title="🛡️ Central de Atendimento / Moderação",
-        description="Precisa de ajuda com alguma partida, denunciar um jogador ou tirar dúvidas? Clique no botão abaixo para abrir um atendimento privado com a moderação.",
-        color=discord.Color.blue()
-    )
-    embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
-
-    view = TicketModView()
-    await ctx.send(embed=embed, view=view)
-
-# ------------------------------------------------------------------
-# PAINEL DA FILA DE MEDIADORES (!fila_med)
+# PAINEL DA FILA DE MEDIADORES (!med)
 # ------------------------------------------------------------------
 def criar_embed_mediadores():
     embed = discord.Embed(
@@ -193,8 +141,8 @@ class MedView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Você não está na fila!", ephemeral=True)
 
-@bot.command(name="fila_med")
-async def gerar_fila_med(ctx):
+@bot.command(name="med")
+async def painel_med(ctx):
     global mensagem_painel_med
     try:
         await ctx.message.delete()
@@ -400,4 +348,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-                
+            
