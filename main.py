@@ -7,17 +7,14 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===================================================================
-# 📝 CONFIGURAÇÕES DO PIX (Mude aqui com os dados do seu app)
-# ===================================================================
-PIX_NOME = "Bruno Raffael"
-PIX_CHAVE = "9c04e5c6-4b9a-4be0-8ed2-780d20192565"
-PIX_QR_URL = "https://i.imgur.com/SEU_LINK_AQUI.png"  # Cole o link direto da imagem do seu QR Code aqui
-
 # Armazena os dados da fila
 fila_jogadores = []
 fila_mediadores = []
 TAMANHO_MAXIMO = 2 
+
+# Dicionário para armazenar o Pix de cada mediador cadastrado (Chave: ID do Mediador)
+# Formato: { id_mediador: {"nome": "Nome", "chave": "Chave", "qr": "Link"} }
+pix_mediadores = {}
 
 mensagem_painel_med = None
 
@@ -27,26 +24,26 @@ EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
 # ------------------------------------------------------------------
-# FORMULÁRIO (MODAL) DE CADASTRO DO PIX
+# FORMULÁRIO (MODAL) DE CADASTRO DO PIX DO MEDIADOR
 # ------------------------------------------------------------------
 class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
     chave_pix = discord.ui.TextInput(
-        label="cadastrar Pix ( aceita CPF,chave aleatória",
+        label="Chave Pix (CPF, e-mail, aleatória)",
         placeholder="Digite sua chave Pix aqui...",
         style=discord.TextStyle.short,
         required=True
     )
 
     nome_conta = discord.ui.TextInput(
-        label="Nome : digite o nome da sua conta no seu app.",
+        label="Nome no app do banco",
         placeholder="Ex: João Silva",
         style=discord.TextStyle.short,
         required=True
     )
 
     link_qr = discord.ui.TextInput(
-        label="Link QR Code : coloque o link do seu QR",
-        placeholder="Cole o link da imagem do seu QR Code aqui...",
+        label="Link do QR Code (opcional)",
+        placeholder="Cole o link da imagem do seu QR Code...",
         style=discord.TextStyle.short,
         required=False
     )
@@ -54,13 +51,19 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
     async def on_submit(self, interaction: discord.Interaction):
         chave = self.chave_pix.value
         nome = self.nome_conta.value
-        qr = self.link_qr.value if self.link_qr.value else "Não informado"
+        qr = self.link_qr.value if self.link_qr.value else ""
+
+        # Salva o Pix vinculado ao ID do mediador que preencheu
+        pix_mediadores[interaction.user.id] = {
+            "nome": nome,
+            "chave": chave,
+            "qr": qr
+        }
 
         await interaction.response.send_message(
-            f"✅ **Pix cadastrado com sucesso!**\n"
+            f"✅ **Seu Pix foi cadastrado/atualizado com sucesso!**\n"
             f"📌 **Nome:** {nome}\n"
-            f"🔑 **Chave:** {chave}\n"
-            f"🖼️ **Link QR Code:** {qr}",
+            f"🔑 **Chave:** {chave}",
             ephemeral=True
         )
 
@@ -68,7 +71,7 @@ class PixView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Cadastrar Pix", style=discord.ButtonStyle.success, emoji="💳")
+    @discord.ui.button(label="Cadastrar Meu Pix", style=discord.ButtonStyle.success, emoji="💳")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioPixModal())
 
@@ -80,10 +83,11 @@ async def gerar_pix(ctx):
         pass
 
     embed = discord.Embed(
-        description="clique nesse botão para cadastrar seu Pix, caso ao contrário não terá como os jogadores adivinharem.",
+        title="💳 Cadastro de Pix do Mediador",
+        description="Clique no botão abaixo para cadastrar o seu Pix. É para este Pix que os jogadores farão o pagamento das partidas que você mediar!",
         color=discord.Color.green()
     )
-    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
+    embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
     await ctx.send(embed=embed, view=view)
@@ -219,9 +223,10 @@ def criar_embed_partida(jogadores, modo_gelo, mediador):
     return embed
 
 class ConfirmarPartidaView(discord.ui.View):
-    def __init__(self, jogadores):
+    def __init__(self, jogadores, mediador):
         super().__init__(timeout=None)
         self.jogadores = jogadores
+        self.mediador = mediador
         self.confirmados = set()
 
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
@@ -245,16 +250,30 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Ambos confirmaram - Envia os dados do Pix do ADM idêntico ao solicitado
-            embed_pix = discord.Embed(
-                title="💳 Realize o Pagamento",
-                description="A partida foi confirmada! Abaixo estão os dados para pagamento:",
-                color=discord.Color.gold()
-            )
-            embed_pix.add_field(name="Nome", value=PIX_NOME, inline=False)
-            embed_pix.add_field(name="Chave", value=f"```{PIX_CHAVE}```", inline=False)
-            embed_pix.set_image(url=PIX_QR_URL)
-            embed_pix.set_footer(text="Envie o comprovante aqui após pagar.")
+            # Verifica se o mediador cadastrou o Pix dele
+            dados_pix = pix_mediadores.get(self.mediador.id)
+
+            if not dados_pix:
+                # Caso o mediador não tenha cadastrado o Pix
+                embed_pix = discord.Embed(
+                    title="💳 Realize o Pagamento",
+                    description=f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar.",
+                    color=discord.Color.red()
+                )
+            else:
+                # Envia exatamente o Pix do mediador que assumiu a partida
+                embed_pix = discord.Embed(
+                    title="💳 Realize o Pagamento",
+                    description="A partida foi confirmada! Faça o pagamento para o Pix do mediador abaixo:",
+                    color=discord.Color.gold()
+                )
+                embed_pix.add_field(name="Nome", value=dados_pix["nome"], inline=False)
+                embed_pix.add_field(name="Chave", value=f"```{dados_pix['chave']}```", inline=False)
+                
+                if dados_pix["qr"]:
+                    embed_pix.set_image(url=dados_pix["qr"])
+                    
+                embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
             for item in self.children:
                 item.disabled = True
@@ -353,7 +372,7 @@ class FilaView(discord.ui.View):
             await topico.add_user(mediador)
 
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo, mediador)
-            view_confirmacao = ConfirmarPartidaView(jogadores_partida)
+            view_confirmacao = ConfirmarPartidaView(jogadores_partida, mediador)
 
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention} | Mediador: {mediador.mention}",
@@ -386,4 +405,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
+    
