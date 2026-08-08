@@ -417,7 +417,6 @@ class PainelMediadorModal(discord.ui.Modal, title="Painel de Controle da Partida
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Aqui você pode tratar os dados enviados através do modal
         resposta = "⚙️ **Ações do Painel Registradas:**\n"
         
         if self.escolha_vencedor_input.value:
@@ -484,4 +483,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
+            
