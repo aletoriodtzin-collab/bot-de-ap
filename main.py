@@ -7,9 +7,12 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Armazena os dados da fila na memória
+# Armazena os dados na memória
 fila_jogadores = []
-TAMANHO_MAXIMO = 2  # 1v1
+fila_mediadores = []  # Fila de mediadores rotativa
+dados_pix = {}        # Guarda o Pix de cada usuário: {user_id: {"nome": ..., "chave": ..., "qr": ...}}
+
+TAMANHO_MAXIMO_JOGADORES = 2  # 1v1
 
 # Emojis personalizados configurados
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
@@ -21,7 +24,6 @@ EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 # FORMULÁRIO (MODAL) DE CADASTRO DO PIX
 # ------------------------------------------------------------------
 class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
-    # Campo 1: Chave Pix
     chave_pix = discord.ui.TextInput(
         label="cadastrar Pix ( aceita CPF,chave aleatória",
         placeholder="Digite sua chave Pix aqui...",
@@ -29,39 +31,36 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         required=True
     )
 
-    # Campo 2: Nome da conta
     nome_conta = discord.ui.TextInput(
         label="Nome : digite o nome da sua conta no seu app.",
-        placeholder="Ex: João Silva",
+        placeholder="Ex: Bruno Raffael",
         style=discord.TextStyle.short,
         required=True
     )
 
-    # Campo 3: Link QR Code
     link_qr = discord.ui.TextInput(
         label="Link QR Code : coloque o link do seu QR",
         placeholder="Cole o link da imagem do seu QR Code aqui...",
         style=discord.TextStyle.short,
-        required=False  # Opcional, mude para True se for obrigatório
+        required=False
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        chave = self.chave_pix.value
-        nome = self.nome_conta.value
-        qr = self.link_qr.value if self.link_qr.value else "Não informado"
+        user_id = interaction.user.id
+        dados_pix[user_id] = {
+            "chave": self.chave_pix.value,
+            "nome": self.nome_conta.value,
+            "qr": self.link_qr.value if self.link_qr.value else "https://cdn.discordapp.com/embed/avatars/0.png"
+        }
 
-        # Mensagem de confirmação que só o usuário enxerga
         await interaction.response.send_message(
             f"✅ **Pix cadastrado com sucesso!**\n"
-            f"📌 **Nome:** {nome}\n"
-            f"🔑 **Chave:** {chave}\n"
-            f"🖼️ **Link QR Code:** {qr}",
+            f"📌 **Nome:** {self.nome_conta.value}\n"
+            f"🔑 **Chave:** {self.chave_pix.value}\n"
+            f"🖼️ **Link QR Code:** {self.link_qr.value if self.link_qr.value else 'Não informado'}",
             ephemeral=True
         )
 
-# ------------------------------------------------------------------
-# BOTÃO DE CADASTRO DO PIX
-# ------------------------------------------------------------------
 class PixView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -70,9 +69,6 @@ class PixView(discord.ui.View):
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioPixModal())
 
-# ------------------------------------------------------------------
-# COMANDO DO PAINEL DO PIX (!pix)
-# ------------------------------------------------------------------
 @bot.command(name="pix")
 async def gerar_pix(ctx):
     try:
@@ -84,15 +80,68 @@ async def gerar_pix(ctx):
         description="clique nesse botão para cadastrar seu Pix, caso ao contrário não terá como os jogadores adivinharem.",
         color=discord.Color.green()
     )
-    
-    # Substitua pelo link do seu Banner
     embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
-
     view = PixView()
     await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
-# ESTRUTURA DA FILA DE PARTIDA
+# SISTEMA DE FILA DE MEDIADORES ROTATIVA
+# ------------------------------------------------------------------
+def criar_embed_mediador():
+    embed = discord.Embed(
+        title="fila de mediador",
+        description="Quando quiser entrar na fila basta clicar no botão abaixo! E necessário pra cair e mediar numa fila",
+        color=discord.Color.gold()
+    )
+    
+    if not fila_mediadores:
+        texto_meds = "*Nenhum mediador na fila no momento.*"
+    else:
+        texto_meds = "\n".join([f"{i+1}- {med.mention}" for i, med in enumerate(fila_mediadores)])
+
+    embed.add_field(name="📋 Fila Atual", value=texto_meds, inline=False)
+    return embed
+
+class FilaMediadorView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Entrar na Fila", style=discord.ButtonStyle.success, emoji="🛡️")
+    async def entrar_fila_med(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if user in fila_mediadores:
+            await interaction.response.send_message("⚠️ Você já está na fila de mediadores!", ephemeral=True)
+            return
+
+        fila_mediadores.append(user)
+        embed_atualizado = criar_embed_mediador()
+        await interaction.response.edit_message(embed=embed_atualizado, view=self)
+        await interaction.followup.send("✅ Você entrou na fila de mediadores!", ephemeral=True)
+
+    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="🚪")
+    async def sair_fila_med(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        if user in fila_mediadores:
+            fila_mediadores.remove(user)
+            embed_atualizado = criar_embed_mediador()
+            await interaction.response.edit_message(embed=embed_atualizado, view=self)
+            await interaction.followup.send("🚪 Você saiu da fila de mediadores.", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Você não está na fila de mediadores!", ephemeral=True)
+
+@bot.command(name="med")
+async def gerar_fila_mediador(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    embed = criar_embed_mediador()
+    view = FilaMediadorView()
+    await ctx.send(embed=embed, view=view)
+
+# ------------------------------------------------------------------
+# ESTRUTURA DA FILA DE PARTIDA E CONFIRMAÇÃO
 # ------------------------------------------------------------------
 def criar_embed_fila():
     embed = discord.Embed(
@@ -125,9 +174,10 @@ def criar_embed_partida(jogadores, modo_gelo):
     return embed
 
 class ConfirmarPartidaView(discord.ui.View):
-    def __init__(self, jogadores):
+    def __init__(self, jogadores, modo_gelo):
         super().__init__(timeout=None)
         self.jogadores = jogadores
+        self.modo_gelo = modo_gelo
         self.confirmados = set()
 
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
@@ -151,16 +201,51 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            embed_final = discord.Embed(
-                title="🚀 Ambos Confirmaram!",
-                description="Todos os jogadores confirmaram! A partida está liberada. Boa sorte!",
-                color=discord.Color.green()
-            )
+            # Desativa os botões do painel de confirmação
             for item in self.children:
                 item.disabled = True
-            
             await interaction.response.edit_message(view=self)
-            await interaction.followup.send(embed=embed_final)
+
+            # ROTATIVIDADE DO MEDIADOR
+            mediador_sorteado = None
+            if fila_mediadores:
+                # Pega o primeiro da fila
+                mediador_sorteado = fila_mediadores.pop(0)
+                # Adiciona de volta ao final da fila (rotatividade)
+                fila_mediadores.append(mediador_sorteado)
+                # Adiciona o mediador sorteado ao tópico
+                try:
+                    await interaction.channel.add_user(mediador_sorteado)
+                except Exception:
+                    pass
+
+            # Pega dados do Pix do Mediador se cadastrado
+            pix_info = dados_pix.get(
+                mediador_sorteado.id if mediador_sorteado else None,
+                {
+                    "nome": "Não cadastrado",
+                    "chave": "Aguardando cadastro do mediador...",
+                    "qr": "https://cdn.discordapp.com/embed/avatars/0.png"
+                }
+            )
+
+            # EMBED 1: Informações da Aposta
+            embed_aposta = discord.Embed(title="✅ Partida Confirmada", color=discord.Color.dark_theme())
+            embed_aposta.add_field(name="🎮 Estilo de Jogo", value=f"1x1 ({self.modo_gelo})", inline=False)
+            
+            med_text = mediador_sorteado.mention if mediador_sorteado else "Nenhum mediador na fila"
+            embed_aposta.add_field(name="Informações da Aposta", value=f"Valor da Sala: R$ 0,15\nMediador:\n{med_text}", inline=False)
+            embed_aposta.add_field(name="💰 Valor da Aposta", value="R$ 0,50", inline=False)
+            
+            j1, j2 = self.jogadores[0], self.jogadores[1]
+            embed_aposta.add_field(name="👤 Jogadores", value=f"{j1.mention}\n{j2.mention}", inline=False)
+
+            # EMBED 2: QR Code e Chave Pix do Mediador
+            embed_pix = discord.Embed(color=discord.Color.dark_theme())
+            embed_pix.set_image(url=pix_info["qr"])
+            embed_pix.set_footer(text=f"Valor a pagar: R$ 0,65\nNome: {pix_info['nome']}\nChave:\n{pix_info['chave']}")
+
+            await interaction.followup.send(embeds=[embed_aposta, embed_pix])
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -210,13 +295,13 @@ class FilaView(discord.ui.View):
             await interaction.response.send_message("⚠️ Você já está na fila!", ephemeral=True)
             return
 
-        if len(fila_jogadores) >= TAMANHO_MAXIMO:
+        if len(fila_jogadores) >= TAMANHO_MAXIMO_JOGADORES:
             await interaction.response.send_message("❌ A fila já está cheia!", ephemeral=True)
             return
 
         fila_jogadores.append(user)
 
-        if len(fila_jogadores) == TAMANHO_MAXIMO:
+        if len(fila_jogadores) == TAMANHO_MAXIMO_JOGADORES:
             jogadores_partida = fila_jogadores.copy()
             fila_jogadores.clear()
 
@@ -226,6 +311,7 @@ class FilaView(discord.ui.View):
             channel = interaction.channel
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
 
+            # Criação do Tópico Privado para a partida
             try:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
@@ -238,11 +324,12 @@ class FilaView(discord.ui.View):
                     auto_archive_duration=60
                 )
 
+            # Adiciona os 2 jogadores ao tópico
             await topico.add_user(j1)
             await topico.add_user(j2)
 
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
-            view_confirmacao = ConfirmarPartidaView(jogadores_partida)
+            view_confirmacao = ConfirmarPartidaView(jogadores_partida, modo_gelo)
 
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention}",
@@ -275,4 +362,3 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
