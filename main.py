@@ -12,6 +12,9 @@ fila_jogadores = []
 fila_mediadores = []  # Fila de mediadores rotativa
 dados_pix = {}        # Guarda o Pix de cada usuário: {user_id: {"nome": ..., "chave": ..., "qr": ...}}
 
+# Variável para salvar a mensagem da fila de mediadores para podermos atualizar a tela na hora
+mensagem_painel_mediador = None
+
 TAMANHO_MAXIMO_JOGADORES = 2  # 1v1
 
 # Emojis personalizados configurados
@@ -19,6 +22,23 @@ EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
+
+# ------------------------------------------------------------------
+# EVENTO PARA APAGAR MENSAGENS DE SISTEMA (Ex: "adicionou alguém ao tópico")
+# ------------------------------------------------------------------
+@bot.event
+async def on_message(message):
+    # Se for uma mensagem de sistema informando entrada/adição de usuário
+    if message.type in [
+        discord.MessageType.recipient_add,
+        discord.MessageType.thread_starter_message
+    ]:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+    
+    await bot.process_commands(message)
 
 # ------------------------------------------------------------------
 # FORMULÁRIO (MODAL) DE CADASTRO DO PIX
@@ -102,6 +122,15 @@ def criar_embed_mediador():
     embed.add_field(name="📋 Fila Atual", value=texto_meds, inline=False)
     return embed
 
+async def atualizar_painel_mediador():
+    global mensagem_painel_mediador
+    if mensagem_painel_mediador:
+        try:
+            embed_atualizado = criar_embed_mediador()
+            await mensagem_painel_mediador.edit(embed=embed_atualizado, view=FilaMediadorView())
+        except Exception:
+            pass
+
 class FilaMediadorView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -114,8 +143,7 @@ class FilaMediadorView(discord.ui.View):
             return
 
         fila_mediadores.append(user)
-        embed_atualizado = criar_embed_mediador()
-        await interaction.response.edit_message(embed=embed_atualizado, view=self)
+        await interaction.response.edit_message(embed=criar_embed_mediador(), view=self)
         await interaction.followup.send("✅ Você entrou na fila de mediadores!", ephemeral=True)
 
     @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="🚪")
@@ -123,14 +151,14 @@ class FilaMediadorView(discord.ui.View):
         user = interaction.user
         if user in fila_mediadores:
             fila_mediadores.remove(user)
-            embed_atualizado = criar_embed_mediador()
-            await interaction.response.edit_message(embed=embed_atualizado, view=self)
+            await interaction.response.edit_message(embed=criar_embed_mediador(), view=self)
             await interaction.followup.send("🚪 Você saiu da fila de mediadores.", ephemeral=True)
         else:
             await interaction.response.send_message("❌ Você não está na fila de mediadores!", ephemeral=True)
 
 @bot.command(name="med")
 async def gerar_fila_mediador(ctx):
+    global mensagem_painel_mediador
     try:
         await ctx.message.delete()
     except Exception:
@@ -138,7 +166,7 @@ async def gerar_fila_mediador(ctx):
 
     embed = criar_embed_mediador()
     view = FilaMediadorView()
-    await ctx.send(embed=embed, view=view)
+    mensagem_painel_mediador = await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
 # ESTRUTURA DA FILA DE PARTIDA E CONFIRMAÇÃO
@@ -209,17 +237,21 @@ class ConfirmarPartidaView(discord.ui.View):
             # ROTATIVIDADE DO MEDIADOR
             mediador_sorteado = None
             if fila_mediadores:
-                # Pega o primeiro da fila
+                # 1. Pega o Mediador 1 (primeiro da fila)
                 mediador_sorteado = fila_mediadores.pop(0)
-                # Adiciona de volta ao final da fila (rotatividade)
+                # 2. Reinsere ele no final da fila (o Mediador 2 agora passa para a posição 1 automaticamente)
                 fila_mediadores.append(mediador_sorteado)
-                # Adiciona o mediador sorteado ao tópico
+                
+                # 3. Atualiza a mensagem da Fila de Mediadores no chat principal na hora!
+                await atualizar_painel_mediador()
+
+                # 4. Adiciona o Mediador no tópico privado
                 try:
                     await interaction.channel.add_user(mediador_sorteado)
                 except Exception:
                     pass
 
-            # Pega dados do Pix do Mediador se cadastrado
+            # Pega dados do Pix do Mediador Sorteado
             pix_info = dados_pix.get(
                 mediador_sorteado.id if mediador_sorteado else None,
                 {
@@ -245,7 +277,10 @@ class ConfirmarPartidaView(discord.ui.View):
             embed_pix.set_image(url=pix_info["qr"])
             embed_pix.set_footer(text=f"Valor a pagar: R$ 0,65\nNome: {pix_info['nome']}\nChave:\n{pix_info['chave']}")
 
-            await interaction.followup.send(embeds=[embed_aposta, embed_pix])
+            # MENCIONA O MEDIADOR NO TÓPICO PARA AVISÁ-LO
+            mencao_mediador = f"🔔 {mediador_sorteado.mention}" if mediador_sorteado else ""
+
+            await interaction.followup.send(content=mencao_mediador, embeds=[embed_aposta, embed_pix])
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -311,7 +346,7 @@ class FilaView(discord.ui.View):
             channel = interaction.channel
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
 
-            # Criação do Tópico Privado para a partida
+            # Cria Tópico Privado
             try:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
@@ -324,7 +359,7 @@ class FilaView(discord.ui.View):
                     auto_archive_duration=60
                 )
 
-            # Adiciona os 2 jogadores ao tópico
+            # Adiciona os Jogadores
             await topico.add_user(j1)
             await topico.add_user(j2)
 
@@ -362,3 +397,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
+    
