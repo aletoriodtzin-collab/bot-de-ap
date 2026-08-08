@@ -52,7 +52,7 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
         nome = self.nome_conta.value
         qr = self.link_qr.value if self.link_qr.value else ""
 
-        # Salva em formato int e str para evitar qualquer falha de chave no dicionário
+        # Salva em formato int e str para garantir compatibilidade total
         user_id_int = interaction.user.id
         user_id_str = str(interaction.user.id)
 
@@ -250,6 +250,7 @@ class ConfirmarPartidaView(discord.ui.View):
         self.confirmados.add(user.id)
 
         if len(self.confirmados) < len(self.jogadores):
+            # Primeiro jogador confirmando
             embed_confirmacao = discord.Embed(
                 title="✅ Partida Confirmada",
                 description=f"{user.mention} confirmou a aposta!\nO outro jogador precisa confirmar para continuar.",
@@ -257,13 +258,17 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Responde a interação para evitar falha de carregamento no botão
-            await interaction.response.defer()
+            # Segundo jogador confirmando (conclui e envia a chave Pix do mediador)
+            embed_confirmacao = discord.Embed(
+                title="✅ Partida Confirmada",
+                description=f"{user.mention} confirmou com sucesso enviando Pix do mediador.",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed_confirmacao)
 
-            # Busca blindada do Pix do mediador (testa ID int, string e atributos extras se houver)
+            # Busca blindada do Pix do mediador
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
-            
-            print(f"[DEBUG PIX] Buscando Pix para o mediador {self.mediador.name} (ID: {self.mediador.id}). Dados encontrados: {dados_pix}")
+            print(f"[DEBUG PIX] Mediador: {self.mediador.name} ({self.mediador.id}) | Dados salvos: {dados_pix}")
 
             embed_pix = discord.Embed(
                 title="💳 Realize o Pagamento",
@@ -283,7 +288,16 @@ class ConfirmarPartidaView(discord.ui.View):
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            # Envia a chave Pix diretamente no tópico da partida
+            # Desativa os botões para finalizar o fluxo da aposta
+            for item in self.children:
+                item.disabled = True
+            
+            try:
+                await interaction.message.edit(view=self)
+            except Exception:
+                pass
+
+            # Envia a chave Pix obrigatoriamente no tópico da partida
             if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
             else:
@@ -490,4 +504,3 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
