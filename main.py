@@ -5,121 +5,94 @@ from discord.ext import commands
 intents = discord.Intents.default()
 intents.message_content = True
 
-# case_insensitive=True faz com que !pix, !Pix e !PIX funcionem igualmente
-bot = commands.Bot(command_prefix="!", intents=intents, case_insensitive=True)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Armazena os dados da fila na memória
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
-# Fila de mediadores na memória (armazena os objetos User/Member)
-fila_mediadores = []
-
-# Todos os seus emojis personalizados configurados!
+# Emojis personalizados configurados
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
-# Dicionário para salvar as chaves pix dos usuários
-dados_pix = {}
-
 # ------------------------------------------------------------------
-# Modal para Cadastro de Pix
+# FORMULÁRIO (MODAL) DE CADASTRO DO PIX
 # ------------------------------------------------------------------
-class PixModal(discord.ui.Modal, title="Cadastrar Chave Pix"):
+class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
+    # Campo 1: Chave Pix
     chave_pix = discord.ui.TextInput(
-        label="Chave Pix",
-        placeholder="Aceita chave aleatória, número de telefone e CPF...",
+        label="cadastrar Pix ( aceita CPF,chave aleatória",
+        placeholder="Digite sua chave Pix aqui...",
         style=discord.TextStyle.short,
         required=True
     )
-    
-    link_qrcode = discord.ui.TextInput(
-        label="Link QR Code",
-        placeholder="Cole o link do seu QR Code aqui...",
+
+    # Campo 2: Nome da conta
+    nome_conta = discord.ui.TextInput(
+        label="Nome : digite o nome da sua conta no seu app.",
+        placeholder="Ex: João Silva",
         style=discord.TextStyle.short,
         required=True
+    )
+
+    # Campo 3: Link QR Code
+    link_qr = discord.ui.TextInput(
+        label="Link QR Code : coloque o link do seu QR",
+        placeholder="Cole o link da imagem do seu QR Code aqui...",
+        style=discord.TextStyle.short,
+        required=False  # Opcional, mude para True se for obrigatório
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        dados_pix[interaction.user.id] = {
-            "chave": self.chave_pix.value,
-            "qrcode": self.link_qrcode.value
-        }
+        chave = self.chave_pix.value
+        nome = self.nome_conta.value
+        qr = self.link_qr.value if self.link_qr.value else "Não informado"
 
-        embed = discord.Embed(
-            title="✅ Pix Cadastrado com Sucesso!",
-            description="Sua chave Pix e QR Code foram salvos com sucesso.",
-            color=discord.Color.green()
+        # Mensagem de confirmação que só o usuário enxerga
+        await interaction.response.send_message(
+            f"✅ **Pix cadastrado com sucesso!**\n"
+            f"📌 **Nome:** {nome}\n"
+            f"🔑 **Chave:** {chave}\n"
+            f"🖼️ **Link QR Code:** {qr}",
+            ephemeral=True
         )
-        embed.add_field(name="🔑 Chave", value=self.chave_pix.value, inline=False)
-        embed.add_field(name="🖼️ QR Code", value=f"[Clique aqui para ver]({self.link_qrcode.value})", inline=False)
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # ------------------------------------------------------------------
-# View do Botão de Cadastro de Pix (Cor Preta / Secondary)
+# BOTÃO DE CADASTRO DO PIX
 # ------------------------------------------------------------------
 class PixView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="clique aqui para cadastrar", style=discord.ButtonStyle.secondary, emoji="❖")
-    async def cadastrar_pix(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(PixModal())
+    @discord.ui.button(label="Cadastrar Pix", style=discord.ButtonStyle.success, emoji="💳")
+    async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FormularioPixModal())
 
 # ------------------------------------------------------------------
-# Função que gera a Embed da Fila de Mediadores
+# COMANDO DO PAINEL DO PIX (!pix)
 # ------------------------------------------------------------------
-def criar_embed_med():
+@bot.command(name="pix")
+async def gerar_pix(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
     embed = discord.Embed(
-        title="🛡️ Fila Mediador",
-        description="Essa fila mediador serve pra você conseguir atender os clientes, sem ela você não vai ser marcado.",
-        color=discord.Color.blue()
+        description="clique nesse botão para cadastrar seu Pix, caso ao contrário não terá como os jogadores adivinharem.",
+        color=discord.Color.green()
     )
+    
+    # Substitua pelo link do seu Banner
+    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
-    if not fila_mediadores:
-        texto_med = "*Nenhum mediador na fila...*"
-    else:
-        texto_med = "\n".join([f"{i+1}-{m.mention}" for i, m in enumerate(fila_mediadores)])
-
-    embed.add_field(name="📋 Mediadores", value=texto_med, inline=False)
-    embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
-    return embed
+    view = PixView()
+    await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
-# View dos Botões da Fila de Mediadores
-# ------------------------------------------------------------------
-class MedView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Entrar na Fila", style=discord.ButtonStyle.success, emoji="✅")
-    async def entrar_med(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        if user in fila_mediadores:
-            await interaction.response.send_message("⚠️ Você já está na fila de mediadores!", ephemeral=True)
-            return
-        
-        fila_mediadores.append(user)
-        embed_atualizado = criar_embed_med()
-        await interaction.response.edit_message(embed=embed_atualizado, view=self)
-        await interaction.followup.send(f"✅ {user.mention} entrou na fila de mediadores!", ephemeral=True)
-
-    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="❌")
-    async def sair_med(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        if user in fila_mediadores:
-            fila_mediadores.remove(user)
-            embed_atualizado = criar_embed_med()
-            await interaction.response.edit_message(embed=embed_atualizado, view=self)
-            await interaction.followup.send(f"🚪 {user.mention} saiu da fila de mediadores.", ephemeral=True)
-        else:
-            await interaction.response.send_message("❌ Você não está na fila de mediadores!", ephemeral=True)
-
-# ------------------------------------------------------------------
-# Função que gera a Embed da Fila no Chat (Painel Público)
+# ESTRUTURA DA FILA DE PARTIDA
 # ------------------------------------------------------------------
 def criar_embed_fila():
     embed = discord.Embed(
@@ -138,9 +111,6 @@ def criar_embed_fila():
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
-# ------------------------------------------------------------------
-# Função que gera a Embed para o Tópico Privado da Partida
-# ------------------------------------------------------------------
 def criar_embed_partida(jogadores, modo_gelo):
     j1, j2 = jogadores[0], jogadores[1]
     embed = discord.Embed(
@@ -154,9 +124,6 @@ def criar_embed_partida(jogadores, modo_gelo):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
-# ------------------------------------------------------------------
-# View dos Botões de Confirmação no Tópico Privado
-# ------------------------------------------------------------------
 class ConfirmarPartidaView(discord.ui.View):
     def __init__(self, jogadores):
         super().__init__(timeout=None)
@@ -166,7 +133,6 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
     async def continuar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-
         if user not in self.jogadores:
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
@@ -199,7 +165,6 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-
         if user not in self.jogadores:
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
@@ -212,12 +177,9 @@ class ConfirmarPartidaView(discord.ui.View):
             description=f"{user.mention} cancelou a partida.",
             color=discord.Color.red()
         )
-        await interaction.response.edit_message(view=self, embed=interaction.message.embeds[0])
+        await interaction.response.edit_message(view=self)
         await interaction.followup.send(embed=embed_cancelado)
 
-# ------------------------------------------------------------------
-# Botões interativos do painel principal (Fila)
-# ------------------------------------------------------------------
 class FilaView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -292,9 +254,6 @@ class FilaView(discord.ui.View):
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
-# ------------------------------------------------------------------
-# Eventos e Comandos
-# ------------------------------------------------------------------
 @bot.event
 async def on_ready():
     print(f"✅ Bot online com sucesso como: {bot.user}")
@@ -310,38 +269,10 @@ async def gerar_fila(ctx):
     view = FilaView()
     await ctx.send(embed=embed, view=view)
 
-@bot.command(name="pix")
-async def comando_pix(ctx):
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    embed = discord.Embed(
-        title="💳 Cadastro de Chave Pix",
-        description="clique aqui para cadastrar seu Pix, pois se não cadastrar não terá como o cliente saber sua chave.",
-        color=discord.Color.blue()
-    )
-    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
-    
-    view = PixView()
-    await ctx.send(embed=embed, view=view)
-
-@bot.command(name="med")
-async def comando_med(ctx):
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    embed = criar_embed_med()
-    view = MedView()
-    await ctx.send(embed=embed, view=view)
-
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-            
+    
