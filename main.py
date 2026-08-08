@@ -74,7 +74,7 @@ class PixView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Cadastrar Meu Pix", style=discord.ButtonStyle.success, emoji="💳")
+    @discord.ui.button(label="Cadastrar Meu Pix", style=discord.ButtonStyle.success, emoji="❖")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioPixModal())
 
@@ -83,7 +83,7 @@ async def slash_pix(interaction: discord.Interaction):
     embed = discord.Embed(
         title="❖ Cadastro de Pix do Mediador",
         description="Clique no botão abaixo para cadastrar o seu Pix. É para este Pix que os jogadores farão o pagamento das partidas que você mediar!",
-        color=discord.Color.green()
+        color=discord.Color.black()
     )
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
