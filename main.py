@@ -7,15 +7,20 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Armazena os dados da fila na memória
+# ===================================================================
+# 📝 CONFIGURAÇÕES DO PIX (Mude aqui com os dados do seu app)
+# ===================================================================
+PIX_NOME = "Bruno Raffael"
+PIX_CHAVE = "9c04e5c6-4b9a-4be0-8ed2-780d20192565"
+PIX_QR_URL = "https://i.imgur.com/SEU_LINK_AQUI.png"  # Cole o link direto da imagem do seu QR Code aqui
+
+# Armazena os dados da fila
 fila_jogadores = []
 fila_mediadores = []
-TAMANHO_MAXIMO = 2  # 1v1
+TAMANHO_MAXIMO = 2 
 
-# Variável para armazenar a mensagem fixa do painel de mediadores e atualizar automaticamente
 mensagem_painel_med = None
 
-# Emojis personalizados configurados
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
@@ -59,9 +64,6 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
             ephemeral=True
         )
 
-# ------------------------------------------------------------------
-# BOTÃO DE CADASTRO DO PIX
-# ------------------------------------------------------------------
 class PixView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -70,9 +72,6 @@ class PixView(discord.ui.View):
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioPixModal())
 
-# ------------------------------------------------------------------
-# COMANDO DO PAINEL DO PIX (!pix)
-# ------------------------------------------------------------------
 @bot.command(name="pix")
 async def gerar_pix(ctx):
     try:
@@ -88,6 +87,41 @@ async def gerar_pix(ctx):
 
     view = PixView()
     await ctx.send(embed=embed, view=view)
+
+# ------------------------------------------------------------------
+# SISTEMA DE SUPORTE / MODERAÇÃO (!med suporte)
+# ------------------------------------------------------------------
+class TicketModView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Chamar Moderação", style=discord.ButtonStyle.primary, emoji="🛡️")
+    async def chamar_moderacao(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = interaction.user
+        channel = interaction.channel
+
+        try:
+            topico = await channel.create_thread(
+                name=f"🛡️-suporte-{user.name}",
+                type=discord.ChannelType.private_thread,
+                auto_archive_duration=60
+            )
+        except Exception:
+            topico = await channel.create_thread(
+                name=f"🛡️-suporte-{user.name}",
+                auto_archive_duration=60
+            )
+
+        await topico.add_user(user)
+
+        embed_ticket = discord.Embed(
+            title="🛡️ Atendimento com a Moderação",
+            description=f"Olá {user.mention}! Um moderador irá te atender em breve.\nDescreva o seu problema ou envie as provas necessárias aqui.",
+            color=discord.Color.blue()
+        )
+
+        await topico.send(content=f"🔔 {user.mention}", embed=embed_ticket)
+        await interaction.response.send_message(f"✅ Seu ticket de atendimento foi criado com sucesso: {topico.mention}", ephemeral=True)
 
 # ------------------------------------------------------------------
 # PAINEL DA FILA DE MEDIADORES (!med)
@@ -211,16 +245,22 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            embed_final = discord.Embed(
-                title="🚀 Ambos Confirmaram!",
-                description="Todos os jogadores confirmaram! A partida está liberada. Boa sorte!",
-                color=discord.Color.green()
+            # Ambos confirmaram - Envia os dados do Pix do ADM idêntico ao solicitado
+            embed_pix = discord.Embed(
+                title="💳 Realize o Pagamento",
+                description="A partida foi confirmada! Abaixo estão os dados para pagamento:",
+                color=discord.Color.gold()
             )
+            embed_pix.add_field(name="Nome", value=PIX_NOME, inline=False)
+            embed_pix.add_field(name="Chave", value=f"```{PIX_CHAVE}```", inline=False)
+            embed_pix.set_image(url=PIX_QR_URL)
+            embed_pix.set_footer(text="Envie o comprovante aqui após pagar.")
+
             for item in self.children:
                 item.disabled = True
             
             await interaction.response.edit_message(view=self)
-            await interaction.followup.send(embed=embed_final)
+            await interaction.followup.send(embed=embed_pix)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -279,14 +319,12 @@ class FilaView(discord.ui.View):
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             if not fila_mediadores:
                 await interaction.response.send_message("❌ Não há mediadores na fila! Aguarde um mediador entrar.", ephemeral=True)
-                fila_jogadores.pop() # Remove o último jogador que tentou entrar
+                fila_jogadores.pop() 
                 return
 
-            # Pega o primeiro mediador, tira da frente e joga pro final da lista
+            # Pega o primeiro mediador e joga automaticamente para o final da fila (rotaciona)
             mediador = fila_mediadores.pop(0)
             fila_mediadores.append(mediador)
-
-            # Atualiza automaticamente o painel de mediadores no canal para refletir a troca de posição em tempo real
             await atualizar_painel_mediadores()
 
             jogadores_partida = fila_jogadores.copy()
@@ -348,4 +386,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-            
+        
