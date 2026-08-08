@@ -465,7 +465,7 @@ class PainelMediadorModal(discord.ui.Modal, title="Painel de Controle da Partida
 
     dar_win_input = discord.ui.TextInput(
         label="Dar Win",
-        placeholder=Nome do jogador para computar a Win...",
+        placeholder="Nome do jogador para computar a Win...",
         style=discord.TextStyle.short,
         required=False
     )
