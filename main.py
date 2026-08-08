@@ -12,7 +12,7 @@ fila_jogadores = []
 fila_mediadores = []  # Fila de mediadores rotativa
 dados_pix = {}        # Guarda o Pix de cada usuário: {user_id: {"nome": ..., "chave": ..., "qr": ...}}
 
-# Variável para salvar a mensagem da fila de mediadores para podermos atualizar a tela na hora
+# Variável para salvar a mensagem da fila de mediadores para poder atualizar na hora
 mensagem_painel_mediador = None
 
 TAMANHO_MAXIMO_JOGADORES = 2  # 1v1
@@ -24,11 +24,10 @@ EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
 # ------------------------------------------------------------------
-# EVENTO PARA APAGAR MENSAGENS DE SISTEMA (Ex: "adicionou alguém ao tópico")
+# EVENTO PARA APAGAR MENSAGENS DE SISTEMA (Ex: "adicionou alguém")
 # ------------------------------------------------------------------
 @bot.event
 async def on_message(message):
-    # Se for uma mensagem de sistema informando entrada/adição de usuário
     if message.type in [
         discord.MessageType.recipient_add,
         discord.MessageType.thread_starter_message
@@ -229,29 +228,24 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Desativa os botões do painel de confirmação
-            for item in self.children:
-                item.disabled = True
-            await interaction.response.edit_message(view=self)
+            # 1. LIMPA TODO O TÓPICO ANTES DE MANDAR O PIX (Apaga as confirmações e conversas)
+            try:
+                await interaction.channel.purge(limit=100)
+            except Exception:
+                pass
 
-            # ROTATIVIDADE DO MEDIADOR
+            # 2. ROTATIVIDADE DO MEDIADOR
             mediador_sorteado = None
             if fila_mediadores:
-                # 1. Pega o Mediador 1 (primeiro da fila)
                 mediador_sorteado = fila_mediadores.pop(0)
-                # 2. Reinsere ele no final da fila (o Mediador 2 agora passa para a posição 1 automaticamente)
                 fila_mediadores.append(mediador_sorteado)
-                
-                # 3. Atualiza a mensagem da Fila de Mediadores no chat principal na hora!
                 await atualizar_painel_mediador()
-
-                # 4. Adiciona o Mediador no tópico privado
                 try:
                     await interaction.channel.add_user(mediador_sorteado)
                 except Exception:
                     pass
 
-            # Pega dados do Pix do Mediador Sorteado
+            # 3. PEGA DADOS DO PIX
             pix_info = dados_pix.get(
                 mediador_sorteado.id if mediador_sorteado else None,
                 {
@@ -261,26 +255,23 @@ class ConfirmarPartidaView(discord.ui.View):
                 }
             )
 
-            # EMBED 1: Informações da Aposta
+            # 4. PREPARA OS EMBEDS
             embed_aposta = discord.Embed(title="✅ Partida Confirmada", color=discord.Color.dark_theme())
             embed_aposta.add_field(name="🎮 Estilo de Jogo", value=f"1x1 ({self.modo_gelo})", inline=False)
-            
             med_text = mediador_sorteado.mention if mediador_sorteado else "Nenhum mediador na fila"
             embed_aposta.add_field(name="Informações da Aposta", value=f"Valor da Sala: R$ 0,15\nMediador:\n{med_text}", inline=False)
             embed_aposta.add_field(name="💰 Valor da Aposta", value="R$ 0,50", inline=False)
-            
             j1, j2 = self.jogadores[0], self.jogadores[1]
             embed_aposta.add_field(name="👤 Jogadores", value=f"{j1.mention}\n{j2.mention}", inline=False)
 
-            # EMBED 2: QR Code e Chave Pix do Mediador
             embed_pix = discord.Embed(color=discord.Color.dark_theme())
             embed_pix.set_image(url=pix_info["qr"])
             embed_pix.set_footer(text=f"Valor a pagar: R$ 0,65\nNome: {pix_info['nome']}\nChave:\n{pix_info['chave']}")
 
-            # MENCIONA O MEDIADOR NO TÓPICO PARA AVISÁ-LO
-            mencao_mediador = f"🔔 {mediador_sorteado.mention}" if mediador_sorteado else ""
+            texto_chamada = f"🔔 **Mediador Sorteado:** {mediador_sorteado.mention}" if mediador_sorteado else "⚠️ Nenhum mediador disponível."
 
-            await interaction.followup.send(content=mencao_mediador, embeds=[embed_aposta, embed_pix])
+            # 5. ENVIA TUDO NO TÓPICO JÁ LIMPO COM O PINGO DIRETO NO TEXTO
+            await interaction.channel.send(content=texto_chamada, embeds=[embed_aposta, embed_pix])
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
