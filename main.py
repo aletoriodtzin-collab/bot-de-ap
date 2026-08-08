@@ -11,15 +11,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
+# Seu emoji personalizado configurado
+EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
+
 # ------------------------------------------------------------------
-# Função que gera a Embed da Fila no Chat
+# Função que gera a Embed da Fila no Chat (Verde + Emoji Customizado)
 # ------------------------------------------------------------------
 def criar_embed_fila():
     embed = discord.Embed(
         title="➔ 1x1 — Fila de Partida",
-        color=discord.Color.red()
+        color=discord.Color.green()  # Barra verde na lateral
     )
-    embed.add_field(name="🎮 Modo", value="1x1 Mobile", inline=False)
+    embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value="1x1 Mobile", inline=False)
     embed.add_field(name="💰 Valor", value="R$ 0,50", inline=False)
 
     if not fila_jogadores:
@@ -32,15 +35,15 @@ def criar_embed_fila():
     return embed
 
 # ------------------------------------------------------------------
-# Função que gera a Embed bonita para dentro do Tópico Privado
+# Função que gera a Embed do Tópico Privado (Verde + Emoji Customizado)
 # ------------------------------------------------------------------
 def criar_embed_partida(jogadores, modo_gelo):
     j1, j2 = jogadores[0], jogadores[1]
     embed = discord.Embed(
         title="⚔️ Partida Confirmada — 1x1",
-        color=discord.Color.red()
+        color=discord.Color.green()  # Barra verde na lateral
     )
-    embed.add_field(name="🎰 Modo de Jogo", value=f"{modo_gelo}", inline=False)
+    embed.add_field(name=f"{EMOJI_CONTROLE} Modo de Jogo", value=f"{modo_gelo}", inline=False)
     embed.add_field(name="💰 Aposta", value="R$ 0,50", inline=False)
     embed.add_field(name="👤 Jogadores", value=f"{j1.mention} vs {j2.mention}", inline=False)
     embed.add_field(name="🔥 Regra", value="Quem ganha come o BLUG comecem", inline=False)
@@ -55,12 +58,12 @@ class FilaView(discord.ui.View):
         super().__init__(timeout=None)
 
     # Botão: Gelo Normal
-    @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.secondary, emoji="🧊")
+    @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji="🧊")
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Normal")
 
     # Botão: Gelo Infinito
-    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.secondary, emoji="🧊")
+    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji="🧊")
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Infinito")
 
@@ -97,7 +100,7 @@ class FilaView(discord.ui.View):
         # Quando lotar a fila (2/2)
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             jogadores_partida = fila_jogadores.copy()
-            fila_jogadores.clear() # Libera a fila pública para o próximo jogo
+            fila_jogadores.clear()
 
             # Reseta o painel público
             await interaction.message.edit(embed=criar_embed_fila(), view=self)
@@ -112,31 +115,20 @@ class FilaView(discord.ui.View):
                     type=discord.ChannelType.private_thread,
                     auto_archive_duration=60
                 )
-
-                # Adiciona os dois jogadores no tópico
-                await topico.add_user(j1)
-                await topico.add_user(j2)
-
-                # Envia a Embed do confronto dentro do tópico privado
-                embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
-                await topico.send(
-                    content=f"🔔 {j1.mention} {j2.mention}",
-                    embed=embed_partida
-                )
-
-            except Exception as e:
-                # Caso o canal não permita tópico privado, cria tópico público como fallback
+            except Exception:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
                     auto_archive_duration=60
                 )
-                await topico.add_user(j1)
-                await topico.add_user(j2)
-                embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
-                await topico.send(
-                    content=f"🔔 {j1.mention} {j2.mention}",
-                    embed=embed_partida
-                )
+
+            await topico.add_user(j1)
+            await topico.add_user(j2)
+
+            embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
+            await topico.send(
+                content=f"🔔 {j1.mention} {j2.mention}",
+                embed=embed_partida
+            )
 
 # ------------------------------------------------------------------
 # Evento e Comando principal
@@ -149,7 +141,7 @@ async def on_ready():
 async def gerar_fila(ctx):
     try:
         await ctx.message.delete()
-    except:
+    except Exception:
         pass
 
     embed = criar_embed_fila()
@@ -162,4 +154,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-                
+        
