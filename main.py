@@ -27,15 +27,15 @@ EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 # ------------------------------------------------------------------
 class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
     chave_pix = discord.ui.TextInput(
-        label="Chave Pix (CPF, e-mail, aleatória)",
-        placeholder="Digite sua chave Pix aqui...",
-        style=discord.TextStyle.short,
+        label="Chave Pix ou Copia e Cola",
+        placeholder="Cole a chave Pix ou o código Copia e Cola aqui...",
+        style=discord.TextStyle.paragraph,
         required=True
     )
 
     nome_conta = discord.ui.TextInput(
         label="Nome no app do banco",
-        placeholder="Ex: João Silva",
+        placeholder="Ex: Luan Bruno",
         style=discord.TextStyle.short,
         required=True
     )
@@ -66,8 +66,7 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
 
         await interaction.response.send_message(
             f"✅ **Seu Pix foi cadastrado/atualizado com sucesso!**\n"
-            f"📌 **Nome:** {nome}\n"
-            f"🔑 **Chave:** {chave}",
+            f"📌 **Nome:** {nome}",
             ephemeral=True
         )
 
@@ -79,13 +78,8 @@ class PixView(discord.ui.View):
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(FormularioPixModal())
 
-@bot.command(name="pix")
-async def gerar_pix(ctx):
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
+@bot.tree.command(name="pix", description="Cadastre o seu Pix para receber os pagamentos das partidas")
+async def slash_pix(interaction: discord.Interaction):
     embed = discord.Embed(
         title="💳 Cadastro de Pix do Mediador",
         description="Clique no botão abaixo para cadastrar o seu Pix. É para este Pix que os jogadores farão o pagamento das partidas que você mediar!",
@@ -94,10 +88,10 @@ async def gerar_pix(ctx):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
-    await ctx.send(embed=embed, view=view)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ------------------------------------------------------------------
-# SISTEMA DE SUPORTE / MODERAÇÃO (!med suporte) - TÓPICO PÚBLICO
+# SISTEMA DE SUPORTE / MODERAÇÃO (TÓPICO PÚBLICO)
 # ------------------------------------------------------------------
 class TicketModView(discord.ui.View):
     def __init__(self):
@@ -132,7 +126,7 @@ class TicketModView(discord.ui.View):
         await interaction.response.send_message(f"✅ Seu ticket de atendimento foi criado com sucesso: {topico.mention}", ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DA FILA DE MEDIADORES (!med)
+# PAINEL DA FILA DE MEDIADORES (/med)
 # ------------------------------------------------------------------
 def criar_embed_mediadores():
     embed = discord.Embed(
@@ -183,26 +177,22 @@ class MedView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Você não está na fila!", ephemeral=True)
 
-@bot.command(name="med")
-async def painel_med(ctx):
+@bot.tree.command(name="med", description="Abre o painel da fila de mediadores")
+async def slash_med(interaction: discord.Interaction):
     global mensagem_painel_med
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    mensagem_painel_med = await ctx.send(embed=criar_embed_mediadores(), view=MedView())
+    await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView())
+    mensagem_painel_med = await interaction.original_response()
 
 # ------------------------------------------------------------------
 # ESTRUTURA DA FILA DE PARTIDA
 # ------------------------------------------------------------------
-def criar_embed_fila():
+def criar_embed_fila(modo_jogo="1x1 Mobile", valor_aposta="R$ 0,50"):
     embed = discord.Embed(
-        title="➔ 1x1 — Fila de Partida",
+        title=f"➔ {modo_jogo} — Fila de Partida",
         color=discord.Color.green()
     )
-    embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value="1x1 Mobile", inline=False)
-    embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value="R$ 0,50", inline=False)
+    embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value=modo_jogo, inline=False)
+    embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value=valor_aposta, inline=False)
 
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
@@ -247,17 +237,10 @@ class ConfirmarPartidaView(discord.ui.View):
         self.confirmados.add(user.id)
 
         if len(self.confirmados) < len(self.jogadores):
-            embed_confirmacao = discord.Embed(
-                title="✅ Partida Confirmada",
-                description=f"{user.mention} confirmou a aposta!\nO outro jogador precisa confirmar para continuar.",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed_confirmacao)
+            await interaction.response.send_message(f"✅ {user.mention} confirmou! Aguardando o outro jogador...", ephemeral=True)
         else:
-            # Responde a interação instantaneamente para evitar falha no botão
             await interaction.response.send_message(f"✅ {user.mention} confirmou! Carregando dados do Pix...", ephemeral=True)
 
-            # Busca blindada do Pix do mediador
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
 
             embed_pix = discord.Embed(
@@ -266,19 +249,19 @@ class ConfirmarPartidaView(discord.ui.View):
             )
 
             if not dados_pix:
-                embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `!pix` para cadastrar antes de mediar."
+                embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `/pix` para cadastrar antes de mediar."
                 embed_pix.color = discord.Color.red()
             else:
-                embed_pix.description = "Ambos os jogadores confirmaram! Faça o pagamento para o Pix do mediador abaixo:"
+                embed_pix.description = "Ambos os jogadores confirmaram! Copie a chave abaixo para realizar o pagamento:"
                 embed_pix.add_field(name="👤 Nome no Banco", value=dados_pix["nome"], inline=False)
-                embed_pix.add_field(name="🔑 Chave Pix", value=f"```{dados_pix['chave']}```", inline=False)
+                embed_pix.add_field(name="🔑 Pix Copia e Cola / Chave", value=f"```\n{dados_pix['chave']}\n```", inline=False)
                 
-                if dados_pix.get("qr"):
-                    embed_pix.set_image(url=dados_pix["qr"])
+                qr_link = dados_pix.get("qr")
+                if qr_link and qr_link.startswith("http"):
+                    embed_pix.set_image(url=qr_link)
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            # Envia a chave Pix no canal/tópico da partida mantendo os botões ativos
             if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
             else:
@@ -287,16 +270,25 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-        if user not in self.jogadores:
-            await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
+        if user not in self.jogadores and user != self.mediador:
+            await interaction.response.send_message("❌ Você não tem permissão para cancelar esta partida!", ephemeral=True)
             return
 
         embed_cancelado = discord.Embed(
             title="❌ Partida Cancelada",
-            description=f"{user.mention} cancelou a partida.",
+            description=f"{user.mention} cancelou a partida. O tópico será apagado.",
             color=discord.Color.red()
         )
+        
         await interaction.response.send_message(embed=embed_cancelado)
+
+        if isinstance(interaction.channel, discord.Thread):
+            try:
+                import asyncio
+                await asyncio.sleep(2)
+                await interaction.channel.delete()
+            except Exception as e:
+                print(f"Erro ao deletar o tópico: {e}")
 
 class FilaView(discord.ui.View):
     def __init__(self):
@@ -382,8 +374,79 @@ class FilaView(discord.ui.View):
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
+@bot.tree.command(name="fila", description="Abre o painel da fila de partidas 1x1")
+async def slash_fila(interaction: discord.Interaction):
+    embed = criar_embed_fila()
+    view = FilaView()
+    await interaction.response.send_message(embed=embed, view=view)
+
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!sala_criada) EM MODO MODAL
+# NOVO COMANDO: /criar_15_filas
+# ------------------------------------------------------------------
+class ModalCriarFilas(discord.ui.Modal, title="Configurar 15 Filas"):
+    canais_input = discord.ui.TextInput(
+        label="IDs dos 5 canais (separados por vírgula)",
+        placeholder="Ex: 123456789, 987654321...",
+        style=discord.TextStyle.paragraph,
+        required=True
+    )
+    
+    modo_select = discord.ui.Select(
+        placeholder="Escolha o modo",
+        options=[
+            discord.SelectOption(label="4v4", value="4v4"),
+            discord.SelectOption(label="3v3", value="3v3"),
+            discord.SelectOption(label="2v2", value="2v2"),
+            discord.SelectOption(label="1v1", value="1v1"),
+        ]
+    )
+
+    valores_input = discord.ui.TextInput(
+        label="Valores (separados por vírgula)",
+        placeholder="Ex: 0.50, 1.00, 2.00",
+        style=discord.TextStyle.short,
+        required=True
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.add_item(self.modo_select)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        canais_ids = [c.strip() for c in self.canais_input.value.split(",")]
+        valores = [v.strip() for v in self.valores_input.value.split(",")]
+        modo = self.modo_select.values[0]
+
+        if len(canais_ids) > 5:
+            await interaction.response.send_message("❌ Você pode selecionar no máximo 5 canais!", ephemeral=True)
+            return
+
+        await interaction.response.send_message("⚙️ Gerando as filas nos canais selecionados...", ephemeral=True)
+
+        valor_atual_idx = 0
+        for canal_id in canais_ids:
+            try:
+                canal = interaction.guild.get_channel(int(canal_id))
+            except Exception:
+                canal = None
+
+            if canal:
+                # Cria 3 filas em cada um dos 5 canais (totalizando 15)
+                for _ in range(3):
+                    val = valores[valor_atual_idx % len(valores)]
+                    embed = criar_embed_fila(modo_jogo=modo, valor_aposta=f"R$ {val}")
+                    view = FilaView()
+                    await canal.send(embed=embed, view=view)
+                    valor_atual_idx += 1
+            else:
+                await interaction.followup.send(f"❌ Não foi possível encontrar o canal com ID: {canal_id}", ephemeral=True)
+
+@bot.tree.command(name="criar_15_filas", description="Gera 15 filas distribuídas em até 5 canais")
+async def slash_criar_15_filas(interaction: discord.Interaction):
+    await interaction.response.send_modal(ModalCriarFilas())
+
+# ------------------------------------------------------------------
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!sala_criada) - MANTIDO EM PREFIXO
 # ------------------------------------------------------------------
 class PainelMediadorModal(discord.ui.Modal, title="Painel de Controle da Partida"):
     escolha_vencedor_input = discord.ui.TextInput(
@@ -402,7 +465,7 @@ class PainelMediadorModal(discord.ui.Modal, title="Painel de Controle da Partida
 
     dar_win_input = discord.ui.TextInput(
         label="Dar Win",
-        placeholder="Nome do jogador para computar a Win...",
+        placeholder=Nome do jogador para computar a Win...",
         style=discord.TextStyle.short,
         required=False
     )
@@ -462,18 +525,12 @@ async def sala_criada(ctx):
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot online com sucesso como: {bot.user}")
-
-@bot.command(name="fila")
-async def gerar_fila(ctx):
     try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    embed = criar_embed_fila()
-    view = FilaView()
-    await ctx.send(embed=embed, view=view)
+        await bot.tree.sync()
+        print(f"✅ Slash commands sincronizados com sucesso!")
+    except Exception as e:
+        print(f"❌ Erro ao sincronizar comandos: {e}")
+    print(f"✅ Bot online com sucesso como: {bot.user}")
 
 TOKEN = os.getenv("TOKEN")
 
@@ -481,4 +538,3 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-        
