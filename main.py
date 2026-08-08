@@ -5,7 +5,8 @@ from discord.ext import commands
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+# case_insensitive=True faz com que !pix, !Pix e !PIX funcionem igualmente
+bot = commands.Bot(command_prefix="!", intents=intents, case_insensitive=True)
 
 # Armazena os dados da fila na memória
 fila_jogadores = []
@@ -176,15 +177,13 @@ class ConfirmarPartidaView(discord.ui.View):
 
         self.confirmados.add(user.id)
 
-        await interaction.response.defer()
-
         if len(self.confirmados) < len(self.jogadores):
             embed_confirmacao = discord.Embed(
                 title="✅ Partida Confirmada",
                 description=f"{user.mention} confirmou a aposta!\nO outro jogador precisa confirmar para continuar.",
                 color=discord.Color.green()
             )
-            await interaction.followup.send(embed=embed_confirmacao)
+            await interaction.response.send_message(embed=embed_confirmacao)
         else:
             embed_final = discord.Embed(
                 title="🚀 Ambos Confirmaram!",
@@ -194,7 +193,7 @@ class ConfirmarPartidaView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             
-            await interaction.message.edit(view=self)
+            await interaction.response.edit_message(view=self)
             await interaction.followup.send(embed=embed_final)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
@@ -205,8 +204,6 @@ class ConfirmarPartidaView(discord.ui.View):
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
 
-        await interaction.response.defer()
-
         for item in self.children:
             item.disabled = True
 
@@ -215,7 +212,7 @@ class ConfirmarPartidaView(discord.ui.View):
             description=f"{user.mention} cancelou a partida.",
             color=discord.Color.red()
         )
-        await interaction.message.edit(view=self)
+        await interaction.response.edit_message(view=self, embed=interaction.message.embeds[0])
         await interaction.followup.send(embed=embed_cancelado)
 
 # ------------------------------------------------------------------
@@ -330,7 +327,6 @@ async def comando_pix(ctx):
     view = PixView()
     await ctx.send(embed=embed, view=view)
 
-# Novo Comando !med para a Fila de Mediadores
 @bot.command(name="med")
 async def comando_med(ctx):
     try:
@@ -348,4 +344,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+            
