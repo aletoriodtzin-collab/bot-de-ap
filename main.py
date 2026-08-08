@@ -254,15 +254,8 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Desativa os botões da mensagem de confirmação para evitar cliques duplos
-            for item in self.children:
-                item.disabled = True
-            try:
-                await interaction.message.edit(view=self)
-            except Exception:
-                pass
-
-            await interaction.response.defer()
+            # Responde a interação instantaneamente para evitar falha no botão
+            await interaction.response.send_message(f"✅ {user.mention} confirmou! Carregando dados do Pix...", ephemeral=True)
 
             # Busca blindada do Pix do mediador
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
@@ -285,7 +278,7 @@ class ConfirmarPartidaView(discord.ui.View):
                     
                 embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            # Envia a chave Pix automaticamente no tópico público da partida
+            # Envia a chave Pix no canal/tópico da partida mantendo os botões ativos
             if isinstance(interaction.channel, discord.Thread):
                 await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
             else:
@@ -298,16 +291,12 @@ class ConfirmarPartidaView(discord.ui.View):
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
 
-        for item in self.children:
-            item.disabled = True
-
         embed_cancelado = discord.Embed(
             title="❌ Partida Cancelada",
             description=f"{user.mention} cancelou a partida.",
             color=discord.Color.red()
         )
-        await interaction.response.edit_message(view=self)
-        await interaction.followup.send(embed=embed_cancelado)
+        await interaction.response.send_message(embed=embed_cancelado)
 
 class FilaView(discord.ui.View):
     def __init__(self):
@@ -492,4 +481,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-    
+        
