@@ -11,14 +11,88 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 fila_jogadores = []
 TAMANHO_MAXIMO = 2  # 1v1
 
-# Todos os seus emojis personalizados configurados!
+# Emojis personalizados configurados
 EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 
 # ------------------------------------------------------------------
-# Função que gera a Embed da Fila no Chat (Painel Público)
+# FORMULÁRIO (MODAL) DE CADASTRO DO PIX
+# ------------------------------------------------------------------
+class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
+    # Campo 1: Chave Pix
+    chave_pix = discord.ui.TextInput(
+        label="cadastrar Pix ( aceita CPF,chave aleatória",
+        placeholder="Digite sua chave Pix aqui...",
+        style=discord.TextStyle.short,
+        required=True
+    )
+
+    # Campo 2: Nome da conta
+    nome_conta = discord.ui.TextInput(
+        label="Nome : digite o nome da sua conta no seu app.",
+        placeholder="Ex: João Silva",
+        style=discord.TextStyle.short,
+        required=True
+    )
+
+    # Campo 3: Link QR Code
+    link_qr = discord.ui.TextInput(
+        label="Link QR Code : coloque o link do seu QR",
+        placeholder="Cole o link da imagem do seu QR Code aqui...",
+        style=discord.TextStyle.short,
+        required=False  # Opcional, mude para True se for obrigatório
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        chave = self.chave_pix.value
+        nome = self.nome_conta.value
+        qr = self.link_qr.value if self.link_qr.value else "Não informado"
+
+        # Mensagem de confirmação que só o usuário enxerga
+        await interaction.response.send_message(
+            f"✅ **Pix cadastrado com sucesso!**\n"
+            f"📌 **Nome:** {nome}\n"
+            f"🔑 **Chave:** {chave}\n"
+            f"🖼️ **Link QR Code:** {qr}",
+            ephemeral=True
+        )
+
+# ------------------------------------------------------------------
+# BOTÃO DE CADASTRO DO PIX
+# ------------------------------------------------------------------
+class PixView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Cadastrar Pix", style=discord.ButtonStyle.success, emoji="💳")
+    async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(FormularioPixModal())
+
+# ------------------------------------------------------------------
+# COMANDO DO PAINEL DO PIX (!pix)
+# ------------------------------------------------------------------
+@bot.command(name="pix")
+async def gerar_pix(ctx):
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    embed = discord.Embed(
+        description="clique nesse botão para cadastrar seu Pix, caso ao contrário não terá como os jogadores adivinharem.",
+        color=discord.Color.green()
+    )
+    
+    # Substitua pelo link do seu Banner
+    embed.set_image(url="https://cdn.discordapp.com/embed/avatars/0.png")
+
+    view = PixView()
+    await ctx.send(embed=embed, view=view)
+
+# ------------------------------------------------------------------
+# ESTRUTURA DA FILA DE PARTIDA
 # ------------------------------------------------------------------
 def criar_embed_fila():
     embed = discord.Embed(
@@ -37,9 +111,6 @@ def criar_embed_fila():
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
-# ------------------------------------------------------------------
-# Função que gera a Embed para o Tópico Privado da Partida
-# ------------------------------------------------------------------
 def criar_embed_partida(jogadores, modo_gelo):
     j1, j2 = jogadores[0], jogadores[1]
     embed = discord.Embed(
@@ -53,9 +124,6 @@ def criar_embed_partida(jogadores, modo_gelo):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
-# ------------------------------------------------------------------
-# View dos Botões de Confirmação no Tópico Privado
-# ------------------------------------------------------------------
 class ConfirmarPartidaView(discord.ui.View):
     def __init__(self, jogadores):
         super().__init__(timeout=None)
@@ -65,8 +133,6 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
     async def continuar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-
-        # Apenas os 2 jogadores da partida podem clicar
         if user not in self.jogadores:
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
@@ -77,7 +143,6 @@ class ConfirmarPartidaView(discord.ui.View):
 
         self.confirmados.add(user.id)
 
-        # Se apenas 1 confirmou por enquanto
         if len(self.confirmados) < len(self.jogadores):
             embed_confirmacao = discord.Embed(
                 title="✅ Partida Confirmada",
@@ -86,13 +151,11 @@ class ConfirmarPartidaView(discord.ui.View):
             )
             await interaction.response.send_message(embed=embed_confirmacao)
         else:
-            # Os 2 jogares confirmaram!
             embed_final = discord.Embed(
                 title="🚀 Ambos Confirmaram!",
                 description="Todos os jogadores confirmaram! A partida está liberada. Boa sorte!",
                 color=discord.Color.green()
             )
-            # Desativa os botões para ninguém clicar de novo
             for item in self.children:
                 item.disabled = True
             
@@ -102,12 +165,10 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-
         if user not in self.jogadores:
             await interaction.response.send_message("❌ Você não faz parte desta partida!", ephemeral=True)
             return
 
-        # Desativa os botões
         for item in self.children:
             item.disabled = True
 
@@ -119,24 +180,18 @@ class ConfirmarPartidaView(discord.ui.View):
         await interaction.response.edit_message(view=self)
         await interaction.followup.send(embed=embed_cancelado)
 
-# ------------------------------------------------------------------
-# Botões interativos do painel principal (Fila)
-# ------------------------------------------------------------------
 class FilaView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    # Botão: Gelo Normal
     @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Normal")
 
-    # Botão: Gelo Infinito
     @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.entrar_na_fila(interaction, "Gelo Infinito")
 
-    # Botão: Sair Fila
     @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
     async def sair_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
@@ -148,7 +203,6 @@ class FilaView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Você não está na fila!", ephemeral=True)
 
-    # Lógica de entrada e criação do tópico privado
     async def entrar_na_fila(self, interaction: discord.Interaction, modo_gelo: str):
         user = interaction.user
 
@@ -162,21 +216,16 @@ class FilaView(discord.ui.View):
 
         fila_jogadores.append(user)
 
-        # Quando lotar a fila (2/2)
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             jogadores_partida = fila_jogadores.copy()
-            
-            # Reset automático da fila
             fila_jogadores.clear()
 
-            # Reseta o painel público do chat para "Aguardando jogador..."
             await interaction.response.edit_message(embed=criar_embed_fila(), view=self)
             await interaction.followup.send(f"✅ Fila lotada! Criando partida...", ephemeral=True)
 
             channel = interaction.channel
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
 
-            # Criar o tópico privado para a partida
             try:
                 topico = await channel.create_thread(
                     name=f"🎮-1x1-{j1.name}-vs-{j2.name}",
@@ -189,11 +238,9 @@ class FilaView(discord.ui.View):
                     auto_archive_duration=60
                 )
 
-            # Adiciona os 2 jogadores no tópico privado
             await topico.add_user(j1)
             await topico.add_user(j2)
 
-            # Envia a embed bonita e os botões de confirmação dentro do tópico
             embed_partida = criar_embed_partida(jogadores_partida, modo_gelo)
             view_confirmacao = ConfirmarPartidaView(jogadores_partida)
 
@@ -203,14 +250,10 @@ class FilaView(discord.ui.View):
                 view=view_confirmacao
             )
         else:
-            # Caso falte jogador (1/2), apenas atualiza a Embed no canal
             embed_atualizado = criar_embed_fila()
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
-# ------------------------------------------------------------------
-# Evento e Comando principal
-# ------------------------------------------------------------------
 @bot.event
 async def on_ready():
     print(f"✅ Bot online com sucesso como: {bot.user}")
@@ -232,4 +275,4 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-            
+        
