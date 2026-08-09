@@ -153,39 +153,38 @@ class ConfigBotModalExtra(discord.ui.Modal, title="Configurações (Parte 2)"):
 
         await interaction.response.send_message("✅ **Configurações adicionais salvas com sucesso!**", ephemeral=True)
 
+class ConfigBotSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Editar Configurações (1/2)", description="Modifica dono e cargos gerais", emoji="⚙️", value="config_1"),
+            discord.SelectOption(label="Editar Configurações (2/2)", description="Modifica cargos de med, pix e comando .p", emoji="🛡️", value="config_2"),
+            discord.SelectOption(label="Resetar total de filas", description="Zera o contador sequencial de filas", emoji="🗑️", value="resetar"),
+            discord.SelectOption(label="Gerar filas", description="Abre o painel para gerar 15 filas decrescentes", emoji="📁", value="gerar")
+        ]
+        super().__init__(placeholder="Selecione uma opção de configuração...", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este menu!", ephemeral=True)
+            return
+
+        escolha = self.values[0]
+
+        if escolha == "config_1":
+            await interaction.response.send_modal(ConfigBotModal())
+        elif escolha == "config_2":
+            await interaction.response.send_modal(ConfigBotModalExtra())
+        elif escolha == "resetar":
+            global contador_filas_criadas
+            contador_filas_criadas = 0
+            await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
+        elif escolha == "gerar":
+            await interaction.response.send_modal(ModalCriarFilasDummy())
+
 class ConfigBotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(label="Editar Configurações (1/2)", style=discord.ButtonStyle.primary, emoji="⚙️")
-    async def abrir_config(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
-            return
-        await interaction.response.send_modal(ConfigBotModal())
-
-    @discord.ui.button(label="Editar Configurações (2/2)", style=discord.ButtonStyle.secondary, emoji="🛡️")
-    async def abrir_config_extra(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
-            return
-        await interaction.response.send_modal(ConfigBotModalExtra())
-
-    @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
-    async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem resetar as filas!", ephemeral=True)
-            return
-        global contador_filas_criadas
-        contador_filas_criadas = 0
-        await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
-
-    @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁")
-    async def gerar_filas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem gerar filas!", ephemeral=True)
-            return
-        await interaction.response.send_modal(ModalCriarFilasDummy())
+        self.add_item(ConfigBotSelect())
 
 @bot.tree.command(name="config_bot", description="Painel de configurações gerais e permissões do bot")
 async def slash_config_bot(interaction: discord.Interaction):
@@ -750,7 +749,6 @@ class ModalNomeEValores(discord.ui.Modal, title="Configurar Nome e Valores"):
             if not valores_nums:
                 valores_nums = [0.50]
             else:
-                # Ordena de forma DECRESCENTE (do maior para o menor)
                 valores_nums.sort(reverse=True)
 
             class ViewSelecaoCanalUnico(discord.ui.View):
@@ -837,6 +835,51 @@ class VencedorSelect(discord.ui.Select):
         ids_partida = jogadores_partidas.get(thread_id, [])
         for pid in ids_partida:
             if pid != vencedor.id:
+                if pid not in estatisticas_jogadores:
+                    estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
+                estatisticas_jogadores[pid]["derrotas"] += 1
+                estatisticas_jogadores[pid]["streak_atual"] = 0
+
+        await interaction.response.send_message(
+            f"🏆 **Vencedor Definido:** {vencedor.mention}\n"
+            f"📈 **Vitórias Consecutivas:** {estatisticas_jogadores[vencedor.id]['streak_atual']}\n"
+            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[vencedor.id]['vitorias']}\n"
+            f"🪙 **Coins:** +1", 
+            ephemeral=False
+        )
+
+class ViewVencedor(discord.ui.View):
+    def __init__(self, membros):
+        super().__init__(timeout=60)
+        self.add_item(VencedorSelect(membros))
+
+class WoSelect(discord.ui.Select):
+    def __init__(self, membros):
+        options = [discord.SelectOption(label=m.display_name, value=str(m.id)) for m in membros]
+        super().__init__(placeholder="Selecione o ganhador por W.O...", options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem definir o W.O!", ephemeral=True)
+            return
+
+        ganhador_id = int(self.values[0])
+        ganhador = interaction.guild.get_member(ganhador_id) or await interaction.guild.fetch_member(ganhador_id)
+        
+        if ganhador.id not in estatisticas_jogadores:
+            estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
+        
+        estatisticas_jogadores[ganhador.id]["vitorias"] += 1
+        estatisticas_jogadores[ganhador.id]["coins"] += 1
+        estatisticas_jogadores[ganhador.id]["streak_atual"] += 1
+        
+        if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
+            estatisticas_jogadores[ganhador.id]["streak"] = estatisticas_jogadores[ganhador.id]["streak_atual"]
+
+        thread_id = interaction.channel.id
+        ids_partida = jogadores_partidas.get(thread_id, [])
+        for pid in ids_partida:
+            if pid != ganhador.id:
                 if pid not in estatisticas_jogadores:
                     estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
                 estatisticas_jogadores[pid]["derrotas"] += 1
