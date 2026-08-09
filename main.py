@@ -162,7 +162,7 @@ async def slash_config_bot(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ------------------------------------------------------------------
-# NOVO COMANDO SLASH: /configura_taxar
+# COMANDO SLASH: /configura_taxar (Visível Apenas para Você - Ephemeral)
 # ------------------------------------------------------------------
 class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
     valor_taxa = discord.ui.TextInput(
@@ -183,15 +183,12 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
         texto = self.valor_taxa.value.strip().replace(",", ".")
         try:
             num = float(texto)
-            # Se o usuário digitou por exemplo 10 ou 10.0 pensando em centavos, ou 0.10. 
-            # Se for maior que 1, assumimos que digitou em centavos (ex: 10 centavos = 0.10 reais). 
-            # Caso digite 0.10, já é em reais. Vamos tratar de forma inteligente:
             if num >= 1.0:
                 taxa_global_centavos = num / 100.0
             else:
                 taxa_global_centavos = num
                 
-            taxa_centavos_exibicao = int(taxa_global_centavos * 100)
+            taxa_centavos_exibicao = int(round(taxa_global_centavos * 100))
             await interaction.response.send_message(
                 f"✅ **Taxa atualizada com sucesso!**\n"
                 f"A taxa configurada agora é de **{taxa_centavos_exibicao} centavos** (R$ {taxa_global_centavos:.2f}).",
@@ -431,7 +428,7 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        texto_jogadores = "\n".join([f"• {j.mention}" for j in fila_jogador])
+        texto_jogadores = "\n".join([f"• {j.mention}" for j in fila_jogadores])
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
@@ -624,14 +621,11 @@ class FilaView(discord.ui.View):
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
 # ------------------------------------------------------------------
-# COMANDO: /criar_15_filas
+# COMANDO: /criar_15_filas (CORRIGIDO)
 # ------------------------------------------------------------------
 class CanalSelect(discord.ui.ChannelSelect):
-    def __init__(self, nome_fila, valores_originais, valores_nums, modo):
-        self.nome_fila = nome_fila
-        self.valores_originais = valores_originais
-        self.valores_nums = valores_nums
-        self.modo = modo
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
         super().__init__(
             placeholder="Selecione até 5 canais...",
             min_values=1,
@@ -641,16 +635,16 @@ class CanalSelect(discord.ui.ChannelSelect):
 
     async def callback(self, interaction: discord.Interaction):
         canais_selecionados = self.values
-        await interaction.response.edit_message(content=f"⚙️ Gerando as filas no modo **{self.modo}** com o nome **{self.nome_fila}**, por favor aguarde...", view=None)
+        await interaction.response.edit_message(content=f"⚙️ Gerando as filas no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}**, por favor aguarde...", view=None)
 
         valor_atual_idx = 0
         for canal in canais_selecionados:
             for _ in range(3):
-                val_str = self.valores_originais[valor_atual_idx % len(self.valores_originais)]
-                val_num = self.valores_nums[valor_atual_idx % len(self.valores_nums)]
+                val_str = self.parent_view.valores_originais[valor_atual_idx % len(self.parent_view.valores_originais)]
+                val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 
-                embed = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo, valor_aposta=f"R$ {val_str}")
-                view = FilaView(nome_fila=self.nome_fila, modo_jogo=self.modo, valor_str=f"R$ {val_str}", valor_num=val_num)
+                embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
+                view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=f"R$ {val_str}", valor_num=val_num)
                 await canal.send(embed=embed, view=view)
                 valor_atual_idx += 1
 
@@ -659,13 +653,15 @@ class CanalSelect(discord.ui.ChannelSelect):
 class ViewSelecaoCanais(discord.ui.View):
     def __init__(self, nome_fila, valores_originais, valores_nums, modo):
         super().__init__(timeout=60)
-        self.add_item(CanalSelect(nome_fila, valores_originais, valores_nums, modo))
-
-class SelectModoFila(discord.ui.Select):
-    def __init__(self, nome_fila, valores_originais, valores_nums):
         self.nome_fila = nome_fila
         self.valores_originais = valores_originais
         self.valores_nums = valores_nums
+        self.modo = modo
+        self.add_item(CanalSelect(self))
+
+class SelectModoFila(discord.ui.Select):
+    def __init__(self, parent_view):
+        self.parent_view = parent_view
         options = [
             discord.SelectOption(label="4v4", value="4v4"),
             discord.SelectOption(label="3v3", value="3v3"),
@@ -676,13 +672,16 @@ class SelectModoFila(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         modo = self.values[0]
-        view_canais = ViewSelecaoCanais(self.nome_fila, self.valores_originais, self.valores_nums, modo)
+        view_canais = ViewSelecaoCanais(self.parent_view.nome_fila, self.parent_view.valores_originais, self.parent_view.valores_nums, modo)
         await interaction.response.edit_message(content=f"📁 Modo selecionado: **{modo}**.\nAgora **clique no botão abaixo para selecionar os canais**:", view=view_canais)
 
 class ViewSelecaoModoFila(discord.ui.View):
     def __init__(self, nome_fila, valores_originais, valores_nums):
         super().__init__(timeout=60)
-        self.add_item(SelectModoFila(self.nome_fila, valores_originais, valores_nums))
+        self.nome_fila = nome_fila
+        self.valores_originais = valores_originais
+        self.valores_nums = valores_nums
+        self.add_item(SelectModoFila(self))
 
 class ModalCriarFilas(discord.ui.Modal, title="Configurar Filas"):
     nome_fila_input = discord.ui.TextInput(
@@ -841,14 +840,12 @@ class PainelMediadorView(discord.ui.View):
 
     @discord.ui.button(label="Dar reembolso", style=discord.ButtonStyle.secondary, emoji="💸")
     async def botao_reembolso(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Pega o valor base da aposta guardado para este tópico e soma a taxa global configurada no momento
         valor_base = valores_apostas_partidas.get(self.thread_id, 0.50)
         valor_reembolso = valor_base + taxa_global_centavos
         
-        # Formata para texto pt-BR com vírgula
         valor_str = f"R$ {valor_reembolso:.2f}".replace(".", ",")
         base_str = f"R$ {valor_base:.2f}".replace(".", ",")
-        taxa_centavos_exibicao = int(taxa_global_centavos * 100)
+        taxa_centavos_exibicao = int(round(taxa_global_centavos * 100))
 
         embed_reembolso = discord.Embed(
             title="💸 Reembolso Solicitado",
