@@ -56,7 +56,6 @@ def verificar_permissao_global(user: discord.Member) -> bool:
     if user.guild_permissions.administrator:
         return True
     
-    # Verifica cargos de mediadores comuns ou configurados
     cargos_permitidos = [
         config_bot_dados.get("cargo_comandos"),
         config_bot_dados.get("cargo_config"),
@@ -360,7 +359,6 @@ async def slash_pix(interaction: discord.Interaction):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
-    # Visível para todos no canal (ephemeral=False)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
@@ -426,7 +424,6 @@ async def slash_med(interaction: discord.Interaction):
         return
 
     global mensagem_painel_med
-    # Visível para todos no canal (ephemeral=False)
     await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView(), ephemeral=False)
     mensagem_painel_med = await interaction.original_response()
 
@@ -835,13 +832,14 @@ class VencedorSelect(discord.ui.Select):
         if estatisticas_jogadores[vencedor.id]["streak_atual"] > estatisticas_jogadores[vencedor.id]["streak"]:
             estatisticas_jogadores[vencedor.id]["streak"] = estatisticas_jogadores[vencedor.id]["streak_atual"]
 
-        if isinstance(interaction.channel, discord.Thread):
-            for m in interaction.channel.members:
-                if not m.bot and m.id != vencedor.id:
-                    if m.id not in estatisticas_jogadores:
-                        estatisticas_jogadores[m.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
-                    estatisticas_jogadores[m.id]["derrotas"] += 1
-                    estatisticas_jogadores[m.id]["streak_atual"] = 0
+        thread_id = interaction.channel.id
+        ids_partida = jogadores_partidas.get(thread_id, [])
+        for pid in ids_partida:
+            if pid != vencedor.id:
+                if pid not in estatisticas_jogadores:
+                    estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
+                estatisticas_jogadores[pid]["derrotas"] += 1
+                estatisticas_jogadores[pid]["streak_atual"] = 0
 
         await interaction.response.send_message(
             f"🏆 **Vencedor Definido:** {vencedor.mention}\n"
@@ -879,13 +877,14 @@ class WoSelect(discord.ui.Select):
         if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
             estatisticas_jogadores[ganhador.id]["streak"] = estatisticas_jogadores[ganhador.id]["streak_atual"]
 
-        if isinstance(interaction.channel, discord.Thread):
-            for m in interaction.channel.members:
-                if not m.bot and m.id != ganhador.id:
-                    if m.id not in estatisticas_jogadores:
-                        estatisticas_jogadores[m.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
-                    estatisticas_jogadores[m.id]["derrotas"] += 1
-                    estatisticas_jogadores[m.id]["streak_atual"] = 0
+        thread_id = interaction.channel.id
+        ids_partida = jogadores_partidas.get(thread_id, [])
+        for pid in ids_partida:
+            if pid != ganhador.id:
+                if pid not in estatisticas_jogadores:
+                    estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
+                estatisticas_jogadores[pid]["derrotas"] += 1
+                estatisticas_jogadores[pid]["streak_atual"] = 0
 
         await interaction.response.send_message(
             f"⚠️ **Vitória por W.O Definida:** {ganhador.mention}\n"
@@ -976,9 +975,15 @@ async def slash_painel_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    mediador_atribuido = mediadores_partidas.get(thread_id)
-
-    membros_partida = [m for m in interaction.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
+    
+    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
+    # Pega direto do dicionário 'jogadores_partidas' em vez de depender apenas de interaction.channel.members
+    ids_jogadores = jogadores_partidas.get(thread_id, [])
+    membros_partida = []
+    for j_id in ids_jogadores:
+        membro = interaction.guild.get_member(j_id) or await interaction.guild.fetch_member(j_id)
+        if membro:
+            membros_partida.append(membro)
 
     embed = discord.Embed(
         title="⚙️ Painel de Controle do Mediador",
@@ -987,6 +992,7 @@ async def slash_painel_sala(interaction: discord.Interaction):
     )
     embed.set_footer(text="Painel exclusivo para controle do Mediador.")
 
+    mediador_atribuido = mediadores_partidas.get(thread_id)
     mediador_id = mediador_atribuido.id if mediador_atribuido else interaction.user.id
     view = PainelMediadorView(membros_partida, thread_id, mediador_id)
     
@@ -1003,9 +1009,14 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    mediador_atribuido = mediadores_partidas.get(thread_id)
-
-    membros_partida = [m for m in interaction.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
+    
+    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
+    ids_jogadores = jogadores_partidas.get(thread_id, [])
+    membros_partida = []
+    for j_id in ids_jogadores:
+        membro = interaction.guild.get_member(j_id) or await interaction.guild.fetch_member(j_id)
+        if membro:
+            membros_partida.append(membro)
 
     embed = discord.Embed(
         title="⚙️ Painel de Controle do Mediador",
@@ -1014,6 +1025,7 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
     )
     embed.set_footer(text="Painel exclusivo para controle do Mediador.")
 
+    mediador_atribuido = mediadores_partidas.get(thread_id)
     mediador_id = mediador_atribuido.id if mediador_atribuido else interaction.user.id
     view = PainelMediadorView(membros_partida, thread_id, mediador_id)
     
@@ -1074,3 +1086,5 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
+
+   
