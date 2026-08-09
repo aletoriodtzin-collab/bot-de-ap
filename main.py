@@ -162,7 +162,7 @@ async def slash_config_bot(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ------------------------------------------------------------------
-# COMANDO SLASH: /configura_taxar (Visível Apenas para Você - Ephemeral)
+# COMANDO SLASH: /configura_taxar
 # ------------------------------------------------------------------
 class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
     valor_taxa = discord.ui.TextInput(
@@ -173,7 +173,6 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Validação de Dono do Bot
         dono_id = config_bot_dados.get("dono_id", "1461858587080130663")
         if str(interaction.user.id) != str(dono_id):
             await interaction.response.send_message("❌ Apenas o dono do bot pode alterar a taxa!", ephemeral=True)
@@ -317,47 +316,12 @@ async def slash_pix(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
-# SISTEMA DE SUPORTE / MODERAÇÃO (TÓPICO PÚBLICO)
-# ------------------------------------------------------------------
-class TicketModView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Chamar Moderação", style=discord.ButtonStyle.primary, emoji="🛡️")
-    async def chamar_moderacao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user = interaction.user
-        channel = interaction.channel
-
-        try:
-            topico = await channel.create_thread(
-                name=f"🛡️-suporte-{user.name}",
-                type=discord.ChannelType.public_thread,
-                auto_archive_duration=60
-            )
-        except Exception:
-            topico = await channel.create_thread(
-                name=f"🛡️-suporte-{user.name}",
-                auto_archive_duration=60
-            )
-
-        await topico.add_user(user)
-
-        embed_ticket = discord.Embed(
-            title="🛡️ Atendimento com a Moderação",
-            description=f"Olá {user.mention}! Um moderador irá te atender em breve.\nDescreva o seu problema ou envie as provas necessárias aqui.",
-            color=discord.Color.blue()
-        )
-
-        await topico.send(content=f"🔔 {user.mention}", embed=embed_ticket)
-        await interaction.response.send_message(f"✅ Seu ticket de atendimento foi criado com sucesso: {topico.mention}", ephemeral=True)
-
-# ------------------------------------------------------------------
 # PAINEL DA FILA DE MEDIADORES (/med)
 # ------------------------------------------------------------------
 def criar_embed_mediadores():
     embed = discord.Embed(
         title="🛡️ Fila de Mediadores",
-        description="Você tem que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
+        description="Você taxa que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
         color=discord.Color.blue()
     )
     
@@ -468,7 +432,7 @@ class ConfirmarPartidaView(discord.ui.View):
         self.confirmados.add(user.id)
 
         if len(self.confirmados) < len(self.jogadores):
-            await interaction.response.send_message(f"✅ {user.mention} confirmou! Aguardando o outro jogador...", ephemeral=True)
+            await interaction.reponse.send_message(f"✅ {user.mention} confirmou! Aguardando o outro jogador...", ephemeral=True)
         else:
             await interaction.response.send_message(f"✅ {user.mention} confirmou! Carregando dados do Pix...", ephemeral=True)
 
@@ -596,14 +560,12 @@ class FilaView(discord.ui.View):
                     auto_archive_duration=60
                 )
 
-            # Salva o valor base da aposta associado a este tópico criado
             valores_apostas_partidas[topico.id] = self.valor_num
 
             await topico.add_user(j1)
             await topico.add_user(j2)
             await topico.add_user(mediador)
 
-            # Aplica a taxa atualizada dinamicamente somando a taxa global ao valor da aposta
             valor_com_taxa_num = self.valor_num + taxa_global_centavos
             valor_com_taxa_str = f"R$ {valor_com_taxa_num:.2f}".replace(".", ",")
 
@@ -621,43 +583,56 @@ class FilaView(discord.ui.View):
             await interaction.followup.send(f"✅ {user.mention} entrou na fila ({modo_gelo})!", ephemeral=True)
 
 # ------------------------------------------------------------------
-# COMANDO: /criar_15_filas (CORRIGIDO)
+# GERENCIAMENTO DE CRIAÇÃO DE 15 FILAS EM 1 SÓ CANAL
 # ------------------------------------------------------------------
-class CanalSelect(discord.ui.ChannelSelect):
+class CanalUnicoSelect(discord.ui.ChannelSelect):
     def __init__(self, parent_view):
         self.parent_view = parent_view
         super().__init__(
-            placeholder="Selecione até 5 canais...",
+            placeholder="Selecione o canal onde serão criadas as 15 filas...",
             min_values=1,
-            max_values=5,
+            max_values=1,
             channel_types=[discord.ChannelType.text]
         )
 
     async def callback(self, interaction: discord.Interaction):
-        canais_selecionados = self.values
-        await interaction.response.edit_message(content=f"⚙️ Gerando as filas no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}**, por favor aguarde...", view=None)
+        canal_selecionado = self.values[0]
+        
+        await interaction.response.send_message(
+            f"⚙️ Gerando **15 filas** no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}** no canal {canal_selecionado.mention}...", 
+            ephemeral=True
+        )
+
+        try:
+            await interaction.message.delete()
+        except Exception:
+            pass
 
         valor_atual_idx = 0
-        for canal in canais_selecionados:
-            for _ in range(3):
+        try:
+            # Loop para gerar exatamente 15 filas seguidas no canal escolhido
+            for _ in range(15):
                 val_str = self.parent_view.valores_originais[valor_atual_idx % len(self.parent_view.valores_originais)]
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 
                 embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
                 view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=f"R$ {val_str}", valor_num=val_num)
-                await canal.send(embed=embed, view=view)
+                
+                await canal_selecionado.send(embed=embed, view=view)
                 valor_atual_idx += 1
 
-        await interaction.followup.send("✅ As filas foram criadas com sucesso nos canais selecionados!", ephemeral=True)
+            await interaction.followup.send(f"✅ As **15 filas** foram criadas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Ocorreu um erro ao enviar as filas: {e}", ephemeral=True)
 
-class ViewSelecaoCanais(discord.ui.View):
+class ViewSelecaoCanalUnico(discord.ui.View):
     def __init__(self, nome_fila, valores_originais, valores_nums, modo):
         super().__init__(timeout=60)
         self.nome_fila = nome_fila
         self.valores_originais = valores_originais
         self.valores_nums = valores_nums
         self.modo = modo
-        self.add_item(CanalSelect(self))
+        self.add_item(CanalUnicoSelect(self))
 
 class SelectModoFila(discord.ui.Select):
     def __init__(self, parent_view):
@@ -672,8 +647,8 @@ class SelectModoFila(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         modo = self.values[0]
-        view_canais = ViewSelecaoCanais(self.parent_view.nome_fila, self.parent_view.valores_originais, self.parent_view.valores_nums, modo)
-        await interaction.response.edit_message(content=f"📁 Modo selecionado: **{modo}**.\nAgora **clique no botão abaixo para selecionar os canais**:", view=view_canais)
+        view_canal = ViewSelecaoCanalUnico(self.parent_view.nome_fila, self.parent_view.valores_originais, self.parent_view.valores_nums, modo)
+        await interaction.response.edit_message(content=f"📁 Modo selecionado: **{modo}**.\nAgora **selecione o canal único abaixo** para gerar as 15 filas:", view=view_canal)
 
 class ViewSelecaoModoFila(discord.ui.View):
     def __init__(self, nome_fila, valores_originais, valores_nums):
@@ -691,7 +666,7 @@ class ModalCriarFilas(discord.ui.Modal, title="Configurar Filas"):
         required=True
     )
     valores_input = discord.ui.TextInput(
-        label="Valores (use vírgula, ex: 0,50, 1,00)",
+        label="Valores (use vírgula, ex: 0,50, 1,00, 2,00)",
         placeholder="Ex: 0,50, 1,00, 2,00",
         style=discord.TextStyle.short,
         required=True
@@ -720,16 +695,16 @@ class ModalCriarFilas(discord.ui.Modal, title="Configurar Filas"):
 
             view_modo = ViewSelecaoModoFila(nome_fila, valores_originais, valores_nums)
             if interaction.response.is_done():
-                await interaction.followup.send("🎮 Escolha abaixo se este canal é **1v1, 2v2, 3v3 ou 4v4**:", view=view_modo, ephemeral=True)
+                await interaction.followup.send("🎮 Escolha abaixo o modo de jogo:", view=view_modo, ephemeral=True)
             else:
-                await interaction.response.send_message("🎮 Escolha abaixo se este canal é **1v1, 2v2, 3v3 ou 4v4**:", view=view_modo, ephemeral=True)
+                await interaction.response.send_message("🎮 Escolha abaixo o modo de jogo:", view=view_modo, ephemeral=True)
         except Exception as e:
             if not interaction.response.is_done():
                 await interaction.response.send_message(f"❌ Ocorreu um erro ao processar os dados: {e}", ephemeral=True)
             else:
                 await interaction.followup.send(f"❌ Ocorreu um erro ao processar os dados: {e}", ephemeral=True)
 
-@bot.tree.command(name="criar_15_filas", description="Gera filas escolhendo o nome, os canais por botões e definindo o modo")
+@bot.tree.command(name="criar_15_filas", description="Gera 15 filas em um único canal escolhido")
 async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_modal(ModalCriarFilas())
 
