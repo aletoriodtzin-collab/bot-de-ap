@@ -432,7 +432,7 @@ class ConfirmarPartidaView(discord.ui.View):
         self.confirmados.add(user.id)
 
         if len(self.confirmados) < len(self.jogadores):
-            await interaction.reponse.send_message(f"✅ {user.mention} confirmou! Aguardando o outro jogador...", ephemeral=True)
+            await interaction.response.send_message(f"✅ {user.mention} confirmou! Aguardando o outro jogador...", ephemeral=True)
         else:
             await interaction.response.send_message(f"✅ {user.mention} confirmou! Carregando dados do Pix...", ephemeral=True)
 
@@ -596,8 +596,12 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        canal_selecionado = self.values[0]
+        canal_selecionado = interaction.guild.get_channel(self.values[0].id)
         
+        if not canal_selecionado:
+            await interaction.response.send_message("❌ Não foi possível encontrar o canal selecionado no servidor.", ephemeral=True)
+            return
+
         await interaction.response.send_message(
             f"⚙️ Gerando **15 filas** no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}** no canal {canal_selecionado.mention}...", 
             ephemeral=True
@@ -610,7 +614,6 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
 
         valor_atual_idx = 0
         try:
-            # Loop para gerar exatamente 15 filas seguidas no canal escolhido
             for _ in range(15):
                 val_str = self.parent_view.valores_originais[valor_atual_idx % len(self.parent_view.valores_originais)]
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
@@ -764,7 +767,7 @@ class WoSelect(discord.ui.Select):
             estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
         
         estatisticas_jogadores[ganhador.id]["vitorias"] += 1
-        estatisticas_jogadores[ganhador.id]["coins"] += 1
+        estatisticas_jogadores[ganhador.id["coins"] += 1
         estatisticas_jogadores[ganhador.id]["streak_atual"] += 1
         
         if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
