@@ -367,7 +367,7 @@ async def slash_pix(interaction: discord.Interaction):
 def criar_embed_mediadores():
     embed = discord.Embed(
         title="🛡️ Fila de Mediadores",
-        description="Você tiene que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
+        description="Você tem que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
         color=discord.Color.blue()
     )
     
@@ -682,11 +682,11 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
         canal_selecionado = interaction.guild.get_channel(self.values[0].id)
         
         if not canal_selecionado:
-            await interaction.response.send_messassage("❌ Não foi possível encontrar o canal selecionado no servidor.", ephemeral=True)
+            await interaction.response.send_message("❌ Não foi possível encontrar o canal selecionado no servidor.", ephemeral=True)
             return
 
         await interaction.response.send_message(
-            f"⚙️ Gerando **15 filas** em ordem crescente no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}** no canal {canal_selecionado.mention}...", 
+            f"⚙️ Gerando **15 filas** em ordem decrescente no modo **{self.parent_view.modo}** com o nome **{self.parent_view.nome_fila}** no canal {canal_selecionado.mention}...", 
             ephemeral=True
         )
 
@@ -697,8 +697,6 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
 
         valor_atual_idx = 0
         try:
-            # Lista temporária para inverter a ordem de envio (de baixo para cima)
-            itens_para_enviar = []
             for _ in range(15):
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 val_str = f"{val_num:.2f}".replace(".", ",")
@@ -706,14 +704,10 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
                 embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
                 view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=val_str, valor_num=val_num)
                 
-                itens_para_enviar.append((embed, view))
+                await canal_selecionado.send(embed=embed, view=view)
                 valor_atual_idx += 1
 
-            # Envia invertido para empilhar de baixo para cima perfeitamente
-            for embed, view in reversed(itens_para_enviar):
-                await canal_selecionado.send(embed=embed, view=view)
-
-            await interaction.followup.send(f"✅ As **15 filas** foram geradas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
+            await interaction.followup.send(f"✅ As **15 filas** em ordem decrescente foram criadas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Ocorreu um erro ao enviar as filas: {e}", ephemeral=True)
 
@@ -725,8 +719,8 @@ class ModalNomeEValores(discord.ui.Modal, title="Configurar Nome e Valores"):
         required=True
     )
     valores_input = discord.ui.TextInput(
-        label="Valores (use vírgula, ex: 1,00, 5,00, 10,00)",
-        placeholder="Ex: 1,00, 5,00, 10,00",
+        label="Valores (use vírgula, ex: 10,00, 5,00, 1,00)",
+        placeholder="Ex: 10,00, 5,00, 1,00",
         style=discord.TextStyle.short,
         required=True
     )
@@ -756,7 +750,8 @@ class ModalNomeEValores(discord.ui.Modal, title="Configurar Nome e Valores"):
             if not valores_nums:
                 valores_nums = [0.50]
             else:
-                valores_nums.sort()
+                # Ordena de forma DECRESCENTE (do maior para o menor)
+                valores_nums.sort(reverse=True)
 
             class ViewSelecaoCanalUnico(discord.ui.View):
                 def __init__(self, nome_fila, valores_nums, modo):
@@ -813,7 +808,7 @@ async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo desejado:", view=view_modo, ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDOS SLASH /painel_sala e /finalizar_sala)
 # ------------------------------------------------------------------
 class VencedorSelect(discord.ui.Select):
     def __init__(self, membros):
@@ -842,51 +837,6 @@ class VencedorSelect(discord.ui.Select):
         ids_partida = jogadores_partidas.get(thread_id, [])
         for pid in ids_partida:
             if pid != vencedor.id:
-                if pid not in estatisticas_jogadores:
-                    estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
-                estatisticas_jogadores[pid]["derrotas"] += 1
-                estatisticas_jogadores[pid]["streak_atual"] = 0
-
-        await interaction.response.send_message(
-            f"🏆 **Vencedor Definido:** {vencedor.mention}\n"
-            f"📈 **Vitórias Consecutivas:** {estatisticas_jogadores[vencedor.id]['streak_atual']}\n"
-            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[vencedor.id]['vitorias']}\n"
-            f"🪙 **Coins:** +1", 
-            ephemeral=False
-        )
-
-class ViewVencedor(discord.ui.View):
-    def __init__(self, membros):
-        super().__init__(timeout=60)
-        self.add_item(VencedorSelect(membros))
-
-class WoSelect(discord.ui.Select):
-    def __init__(self, membros):
-        options = [discord.SelectOption(label=m.display_name, value=str(m.id)) for m in membros]
-        super().__init__(placeholder="Selecione o ganhador por W.O...", options=options, min_values=1, max_values=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas mediadores podem definir o W.O!", ephemeral=True)
-            return
-
-        ganhador_id = int(self.values[0])
-        ganhador = interaction.guild.get_member(ganhador_id) or await interaction.guild.fetch_member(ganhador_id)
-        
-        if ganhador.id not in estatisticas_jogadores:
-            estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
-        
-        estatisticas_jogadores[ganhador.id]["vitorias"] += 1
-        estatisticas_jogadores[ganhador.id]["coins"] += 1
-        estatisticas_jogadores[ganhador.id]["streak_atual"] += 1
-        
-        if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
-            estatisticas_jogadores[ganhador.id]["streak"] = estatisticas_jogadores[ganhador.id]["streak_atual"]
-
-        thread_id = interaction.channel.id
-        ids_partida = jogadores_partidas.get(thread_id, [])
-        for pid in ids_partida:
-            if pid != ganhador.id:
                 if pid not in estatisticas_jogadores:
                     estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
                 estatisticas_jogadores[pid]["derrotas"] += 1
@@ -981,6 +931,7 @@ async def slash_painel_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
+    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1012,6 +963,7 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
+    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
