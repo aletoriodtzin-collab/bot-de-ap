@@ -153,39 +153,38 @@ class ConfigBotModalExtra(discord.ui.Modal, title="Configurações (Parte 2)"):
 
         await interaction.response.send_message("✅ **Configurações adicionais salvas com sucesso!**", ephemeral=True)
 
-class ConfigView(discord.ui.View):
+class ConfigBotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        
-        select = discord.ui.Select(
-            placeholder="Selecione o que deseja configurar...",
-            options=[
-                discord.SelectOption(label="Configurações Gerais", value="geral", description="Dono e Permissões", emoji="⚙️"),
-                discord.SelectOption(label="Configurações Avançadas", value="extra", description="Cargos de Mediação e Pix", emoji="🛡️"),
-                discord.SelectOption(label="Resetar Filas", value="reset", description="Zera o contador total", emoji="🗑️"),
-                discord.SelectOption(label="Gerar Filas", value="gerar", description="Abre o painel de filas", emoji="📁")
-            ]
-        )
-        
-        async def select_callback(interaction: discord.Interaction):
-            if not verificar_permissao_global(interaction.user):
-                return await interaction.response.send_message("❌ Sem permissão!", ephemeral=True)
-            
-            valor = select.values[0]
-            if valor == "geral":
-                await interaction.response.send_modal(ConfigBotModal())
-            elif valor == "extra":
-                await interaction.response.send_modal(ConfigBotModalExtra())
-            elif valor == "reset":
-                global contador_filas_criadas
-                contador_filas_criadas = 0
-                await interaction.response.send_message("🗑️ Contador de filas resetado para 0 com sucesso!", ephemeral=True)
-            elif valor == "gerar":
-                await interaction.response.send_modal(ModalCriarFilasDummy())
 
-        select.callback = select_callback
-        self.add_item(select)
+    @discord.ui.button(label="Editar Configurações (1/2)", style=discord.ButtonStyle.primary, emoji="⚙️")
+    async def abrir_config(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_modal(ConfigBotModal())
 
+    @discord.ui.button(label="Editar Configurações (2/2)", style=discord.ButtonStyle.secondary, emoji="🛡️")
+    async def abrir_config_extra(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_modal(ConfigBotModalExtra())
+
+    @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
+    async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem resetar as filas!", ephemeral=True)
+            return
+        global contador_filas_criadas
+        contador_filas_criadas = 0
+        await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
+
+    @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁")
+    async def gerar_filas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem gerar filas!", ephemeral=True)
+            return
         await interaction.response.send_modal(ModalCriarFilasDummy())
 
 @bot.tree.command(name="config_bot", description="Painel de configurações gerais e permissões do bot")
