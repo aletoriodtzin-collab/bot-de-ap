@@ -360,7 +360,8 @@ async def slash_pix(interaction: discord.Interaction):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    # Visível para todos no canal (ephemeral=False)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
 # PAINEL DA FILA DE MEDIADORES (/med)
@@ -425,7 +426,8 @@ async def slash_med(interaction: discord.Interaction):
         return
 
     global mensagem_painel_med
-    await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView(), ephemeral=True)
+    # Visível para todos no canal (ephemeral=False)
+    await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView(), ephemeral=False)
     mensagem_painel_med = await interaction.original_response()
 
 # ------------------------------------------------------------------
@@ -808,7 +810,7 @@ async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo desejado:", view=view_modo, ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDO SLASH /painel_sala)
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDOS SLASH /painel_sala e /finalizar_sala)
 # ------------------------------------------------------------------
 class VencedorSelect(discord.ui.Select):
     def __init__(self, membros):
@@ -898,7 +900,6 @@ class ViewWo(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(WoSelect(membros))
 
-# Menu de Seleção (Dropdown) para substituir os botões do !finalizar_sala / /painel_sala
 class PainelMediadorSelect(discord.ui.Select):
     def __init__(self, membros_partida, thread_id, mediador_id):
         self.membros_partida = membros_partida
@@ -991,25 +992,20 @@ async def slash_painel_sala(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-@bot.command(name="finalizar_sala")
-async def finalizar_sala(ctx):
-    try:
-        await ctx.message.delete()
-    except Exception:
-        pass
-
-    if not verificar_permissao_global(ctx.author):
-        await ctx.send("❌ Apenas mediadores podem usar este comando!", delete_after=5)
+@bot.tree.command(name="finalizar_sala", description="Abre o painel de gerenciamento/finalização da sala atual")
+async def slash_finalizar_sala(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Apenas mediadores podem usar este comando!", ephemeral=True)
         return
 
-    if not isinstance(ctx.channel, discord.Thread):
-        await ctx.send("❌ Este comando só pode ser utilizado dentro do tópico da partida!", delete_after=5)
+    if not isinstance(interaction.channel, discord.Thread):
+        await interaction.response.send_message("❌ Este comando só pode ser utilizado dentro do tópico da partida!", ephemeral=True)
         return
 
-    thread_id = ctx.channel.id
+    thread_id = interaction.channel.id
     mediador_atribuido = mediadores_partidas.get(thread_id)
 
-    membros_partida = [m for m in ctx.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
+    membros_partida = [m for m in interaction.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
 
     embed = discord.Embed(
         title="⚙️ Painel de Controle do Mediador",
@@ -1018,10 +1014,10 @@ async def finalizar_sala(ctx):
     )
     embed.set_footer(text="Painel exclusivo para controle do Mediador.")
 
-    mediador_id = mediador_atribuido.id if mediador_atribuido else ctx.author.id
+    mediador_id = mediador_atribuido.id if mediador_atribuido else interaction.user.id
     view = PainelMediadorView(membros_partida, thread_id, mediador_id)
     
-    await ctx.send(embed=embed, view=view)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
 # EVENTO ON_MESSAGE: DETECTAR QUANDO OS JOGADORES DIZEM "PAGO"
