@@ -362,21 +362,19 @@ async def slash_pix(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
-# PAINEL DA FILA DE MEDIADORES (/med) - ORDENADO DE BAIXO PARA CIMA
+# PAINEL DA FILA DE MEDIADORES (/med)
 # ------------------------------------------------------------------
 def criar_embed_mediadores():
     embed = discord.Embed(
         title="🛡️ Fila de Mediadores",
-        description="Você tem que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
+        description="Você tiene que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
         color=discord.Color.blue()
     )
     
     if not fila_mediadores:
         texto = "*Nenhum mediador disponível no momento.*"
     else:
-        # Inverte a lista [::-1] para que os novos mediadores subam de baixo para cima
-        mediadores_invertidos = list(enumerate(fila_mediadores))[::-1]
-        texto = "\n".join([f"{i+1}- {m.mention}" for i, m in mediadores_invertidos])
+        texto = "\n".join([f"{i+1}- {m.mention}" for i, m in enumerate(fila_mediadores)])
     
     embed.add_field(name="Mediadores em espera:", value=texto, inline=False)
     return embed
@@ -430,7 +428,7 @@ async def slash_med(interaction: discord.Interaction):
     mensagem_painel_med = await interaction.original_response()
 
 # ------------------------------------------------------------------
-# ESTRUTURA DA FILA DE PARTIDA - ORDENADO DE BAIXO PARA CIMA
+# ESTRUTURA DA FILA DE PARTIDA
 # ------------------------------------------------------------------
 def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_aposta="R$ 0,50"):
     embed = discord.Embed(
@@ -443,9 +441,7 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        # Inverte a listagem de jogadores para empilhar de baixo para cima ([::-1])
-        jogadores_invertidos = fila_jogadores[::-1]
-        linhas = [f"• {j.display_name} | {gelo}" for j, gelo in jogadores_invertidos]
+        linhas = [f"• {j.display_name} | {gelo}" for j, gelo in fila_jogadores]
         texto_jogadores = "\n".join(linhas)
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
@@ -686,7 +682,7 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
         canal_selecionado = interaction.guild.get_channel(self.values[0].id)
         
         if not canal_selecionado:
-            await interaction.response.send_message("❌ Não foi possível encontrar o canal selecionado no servidor.", ephemeral=True)
+            await interaction.response.send_messassage("❌ Não foi possível encontrar o canal selecionado no servidor.", ephemeral=True)
             return
 
         await interaction.response.send_message(
@@ -701,6 +697,8 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
 
         valor_atual_idx = 0
         try:
+            # Lista temporária para inverter a ordem de envio (de baixo para cima)
+            itens_para_enviar = []
             for _ in range(15):
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 val_str = f"{val_num:.2f}".replace(".", ",")
@@ -708,10 +706,14 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
                 embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
                 view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=val_str, valor_num=val_num)
                 
-                await canal_selecionado.send(embed=embed, view=view)
+                itens_para_enviar.append((embed, view))
                 valor_atual_idx += 1
 
-            await interaction.followup.send(f"✅ As **15 filas** em ordem crescente foram criadas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
+            # Envia invertido para empilhar de baixo para cima perfeitamente
+            for embed, view in reversed(itens_para_enviar):
+                await canal_selecionado.send(embed=embed, view=view)
+
+            await interaction.followup.send(f"✅ As **15 filas** foram geradas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Ocorreu um erro ao enviar as filas: {e}", ephemeral=True)
 
@@ -979,7 +981,6 @@ async def slash_painel_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1011,7 +1012,6 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
