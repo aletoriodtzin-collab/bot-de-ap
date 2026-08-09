@@ -767,7 +767,7 @@ class WoSelect(discord.ui.Select):
             estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
         
         estatisticas_jogadores[ganhador.id]["vitorias"] += 1
-        estatisticas_jogadores[ganhador.id["coins"] += 1
+        estatisticas_jogadores[ganhador.id]["coins"] += 1
         estatisticas_jogadores[ganhador.id]["streak_atual"] += 1
         
         if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
