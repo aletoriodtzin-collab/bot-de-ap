@@ -69,109 +69,71 @@ def verificar_permissao_global(user: discord.Member) -> bool:
                 return True
     return False
 
-class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
-    dono_id = discord.ui.TextInput(
-        label="Quem pode mexer no bot? (ID)",
-        placeholder="Ex: 1461858587080130663",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_comandos = discord.ui.TextInput(
-        label="Quem pode usar os comandos? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_criar_fila = discord.ui.TextInput(
-        label="Quem pode criar fila? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_criar_pix = discord.ui.TextInput(
-        label="Quem pode criar painel Pix? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_config = discord.ui.TextInput(
-        label="Quem pode mexer nas configs? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
+class ConfigBotSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Cargo p/ Comandos", value="cargo_comandos", description="Gerenciar quem pode usar os comandos", emoji="⌨️"),
+            discord.SelectOption(label="Cargo p/ Criar Fila", value="cargo_criar_fila", description="Gerenciar quem pode criar fila", emoji="➔"),
+            discord.SelectOption(label="Cargo p/ Painel Pix", value="cargo_criar_pix", description="Gerenciar quem pode criar painel Pix", emoji="💳"),
+            discord.SelectOption(label="Cargo p/ Mexer Config", value="cargo_config", description="Gerenciar quem pode mexer nas configs", emoji="🔧"),
+            discord.SelectOption(label="Cargo p/ Entrar Fila Med", value="cargo_entrar_med", description="Cargos p/ entrar na fila de mediador", emoji="🛡️"),
+            discord.SelectOption(label="Cargo p/ Cadastrar Pix", value="cargo_cadastrar_pix", description="Cargos p/ cadastrar o Pix", emoji="💰"),
+            discord.SelectOption(label="Cargo p/ Comando .p", value="cargo_comando_p", description="Cargos p/ acionar o comando .p", emoji="📊")
+        ]
+        super().__init__(placeholder="Selecione qual configuração deseja alterar...", options=options, min_values=1, max_values=1)
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction):
         if not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Você não tem permissão para alterar estas configurações!", ephemeral=True)
             return
 
-        if self.dono_id.value:
-            config_bot_dados["dono_id"] = self.dono_id.value.strip()
-        if self.cargo_comandos.value:
-            config_bot_dados["cargo_comandos"] = self.cargo_comandos.value.strip()
-        if self.cargo_criar_fila.value:
-            config_bot_dados["cargo_criar_fila"] = self.cargo_criar_fila.value.strip()
-        if self.cargo_criar_pix.value:
-            config_bot_dados["cargo_criar_pix"] = self.cargo_criar_pix.value.strip()
-        if self.cargo_config.value:
-            config_bot_dados["cargo_config"] = self.cargo_config.value.strip()
-
-        await interaction.response.send_message("✅ **Configurações do bot atualizadas com sucesso!**", ephemeral=True)
-
-class ConfigBotModalExtra(discord.ui.Modal, title="Configurações (Parte 2)"):
-    cargo_entrar_med = discord.ui.TextInput(
-        label="Cargos p/ entrar na fila de mediador",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_cadastrar_pix = discord.ui.TextInput(
-        label="Cargos p/ cadastrar o Pix",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_comando_p = discord.ui.TextInput(
-        label="Cargos p/ acionar o comando .p",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Você não tem permissão para alterar estas configurações!", ephemeral=True)
+        config_key = self.values[0]
+        
+        # Pega todos os cargos do servidor (excluindo @everyone que é o primeiro cargo)
+        cargos = [role for role in interaction.guild.roles if role != interaction.guild.default_role]
+        
+        if not cargos:
+            await interaction.response.send_message("❌ Não há cargos disponíveis neste servidor (além do @everyone).", ephemeral=True)
             return
 
-        if self.cargo_entrar_med.value:
-            config_bot_dados["cargo_entrar_med"] = self.cargo_entrar_med.value.strip()
-        if self.cargo_cadastrar_pix.value:
-            config_bot_dados["cargo_cadastrar_pix"] = self.cargo_cadastrar_pix.value.strip()
-        if self.cargo_comando_p.value:
-            config_bot_dados["cargo_comando_p"] = self.cargo_comando_p.value.strip()
+        class CargoSelectView(discord.ui.View):
+            def __init__(self, key):
+                super().__init__(timeout=60)
+                self.key = key
+                
+                # O Discord permite no máximo 25 opções em um Select Menu
+                cargos_limitados = cargos[:25]
+                
+                class RoleSelect(discord.ui.Select):
+                    def __init__(self, parent_view_inner, key_inner):
+                        self.parent_view_inner = parent_view_inner
+                        self.key_inner = key_inner
+                        options_roles = [discord.SelectOption(label=r.name, value=str(r.id)) for r in cargos_limitados]
+                        super().__init__(placeholder="Selecione o cargo desejado...", options=options_roles, min_values=1, max_values=1)
 
-        await interaction.response.send_message("✅ **Configurações adicionais salvas com sucesso!**", ephemeral=True)
+                    async def callback(self, interaction_inner: discord.Interaction):
+                        if not verificar_permissao_global(interaction_inner.user):
+                            await interaction_inner.response.send_message("❌ Você não tem permissão!", ephemeral=True)
+                            return
+                        
+                        cargo_id = self.values[0]
+                        config_bot_dados[self.key_inner] = cargo_id
+                        
+                        cargo_obj = interaction_inner.guild.get_role(int(cargo_id))
+                        nome_cargo = cargo_obj.name if cargo_obj else cargo_id
+
+                        await interaction_inner.response.send_message(f"✅ **Configuração atualizada com sucesso!** Cargo definido para: **{nome_cargo}**", ephemeral=True)
+
+                self.add_item(RoleSelect(self, self.key))
+
+        await interaction.response.send_message(f"👇 Selecione abaixo o novo cargo para **{config_key}**:", view=CargoSelectView(config_key), ephemeral=True)
 
 class ConfigBotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+        self.add_item(ConfigBotSelect())
 
-    @discord.ui.button(label="Editar Configurações (1/2)", style=discord.ButtonStyle.primary, emoji="⚙️")
-    async def abrir_config(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
-            return
-        await interaction.response.send_modal(ConfigBotModal())
-
-    @discord.ui.button(label="Editar Configurações (2/2)", style=discord.ButtonStyle.secondary, emoji="🛡️")
-    async def abrir_config_extra(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
-            return
-        await interaction.response.send_modal(ConfigBotModalExtra())
-
-    @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
+    @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️", row=1)
     async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Apenas o dono ou mediadores podem resetar as filas!", ephemeral=True)
@@ -180,7 +142,7 @@ class ConfigBotView(discord.ui.View):
         contador_filas_criadas = 0
         await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
 
-    @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁")
+    @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁", row=1)
     async def gerar_filas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Apenas o dono ou mediadores podem gerar filas!", ephemeral=True)
@@ -193,19 +155,25 @@ async def slash_config_bot(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Você não tem permissão para acessar este painel de configuração!", ephemeral=True)
         return
 
+    def get_role_name(role_id):
+        if not role_id:
+            return "Não definido"
+        role = interaction.guild.get_role(int(role_id))
+        return role.mention if role else role_id
+
     embed = discord.Embed(
         title="⚙️ Painel de Configurações do Bot",
         description="Gerencie abaixo quem tem permissão para executar ações, administrar o servidor e gerenciar filas.",
         color=discord.Color.blurple()
     )
     embed.add_field(name="👤 Dono do Bot (ID)", value=config_bot_dados["dono_id"] or "Não definido", inline=False)
-    embed.add_field(name="⌨️ Cargo p/ Comandos", value=config_bot_dados["cargo_comandos"] or "Não definido", inline=True)
-    embed.add_field(name="➔ Cargo p/ Criar Fila", value=config_bot_dados["cargo_criar_fila"] or "Não definido", inline=True)
-    embed.add_field(name="💳 Cargo p/ Painel Pix", value=config_bot_dados["cargo_criar_pix"] or "Não definido", inline=True)
-    embed.add_field(name="🔧 Cargo p/ Mexer Config", value=config_bot_dados["cargo_config"] or "Não definido", inline=True)
-    embed.add_field(name="🛡️ Cargo p/ Entrar Fila Med", value=config_bot_dados["cargo_entrar_med"] or "Não definido", inline=True)
-    embed.add_field(name="💰 Cargo p/ Cadastrar Pix", value=config_bot_dados["cargo_cadastrar_pix"] or "Não definido", inline=True)
-    embed.add_field(name="📊 Cargo p/ Comando .p", value=config_bot_dados["cargo_comando_p"] or "Não definido", inline=True)
+    embed.add_field(name="⌨️ Cargo p/ Comandos", value=get_role_name(config_bot_dados["cargo_comandos"]), inline=True)
+    embed.add_field(name="➔ Cargo p/ Criar Fila", value=get_role_name(config_bot_dados["cargo_criar_fila"]), inline=True)
+    embed.add_field(name="💳 Cargo p/ Painel Pix", value=get_role_name(config_bot_dados["cargo_criar_pix"]), inline=True)
+    embed.add_field(name="🔧 Cargo p/ Mexer Config", value=get_role_name(config_bot_dados["cargo_config"]), inline=True)
+    embed.add_field(name="🛡️ Cargo p/ Entrar Fila Med", value=get_role_name(config_bot_dados["cargo_entrar_med"]), inline=True)
+    embed.add_field(name="💰 Cargo p/ Cadastrar Pix", value=get_role_name(config_bot_dados["cargo_cadastrar_pix"]), inline=True)
+    embed.add_field(name="📊 Cargo p/ Comando .p", value=get_role_name(config_bot_dados["cargo_comando_p"]), inline=True)
     embed.add_field(name="📁 Filas Criadas Atualmente", value=str(contador_filas_criadas), inline=False)
 
     view = ConfigBotView()
@@ -844,7 +812,8 @@ class VencedorSelect(discord.ui.Select):
         await interaction.response.send_message(
             f"🏆 **Vencedor Definido:** {vencedor.mention}\n"
             f"📈 **Vitórias Consecutivas:** {estatisticas_jogadores[vencedor.id]['streak_atual']}\n"
-            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[vencedor.id]['vitorias']}\n"
+            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[vencedor.id]['vitorias']}\
+            n"
             f"🪙 **Coins:** +1", 
             ephemeral=False
         )
@@ -976,8 +945,6 @@ async def slash_painel_sala(interaction: discord.Interaction):
 
     thread_id = interaction.channel.id
     
-    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
-    # Pega direto do dicionário 'jogadores_partidas' em vez de depender apenas de interaction.channel.members
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1010,7 +977,6 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
 
     thread_id = interaction.channel.id
     
-    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1086,5 +1052,3 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
-
-   
