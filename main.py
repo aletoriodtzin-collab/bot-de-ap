@@ -441,7 +441,8 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        linhas = [f"• {j.display_name} | {gelo}" for j, gelo in fila_jogadores]
+        # CORREÇÃO: Utilizando j.mention para o nome ficar azul e marcado corretamente
+        linhas = [f"• {j.mention} | {gelo}" for j, gelo in fila_jogadores]
         texto_jogadores = "\n".join(linhas)
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
@@ -975,9 +976,6 @@ async def slash_painel_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    
-    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
-    # Pega direto do dicionário 'jogadores_partidas' em vez de depender apenas de interaction.channel.members
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1009,8 +1007,6 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
-    
-    # CORREÇÃO DA BUSCA DE JOGADORES ELEGÍVEIS:
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
