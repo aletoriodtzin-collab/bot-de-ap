@@ -4,6 +4,7 @@ from discord.ext import commands
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -20,6 +21,9 @@ estatisticas_jogadores = {}
 
 # Dicionário para armazenar o valor da aposta de cada tópico/partida ativa (ex: {thread_id: 10.50})
 valores_apostas_partidas = {}
+
+# Controle para saber quais jogadores já disseram "pago" em cada tópico: {thread_id: set([user_id1, user_id2])}
+pagamentos_pendentes = {}
 
 # Taxa padrão global em centavos (ex: 10 centavos = 0.10)
 taxa_global_centavos = 0.10
@@ -398,24 +402,33 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
     return embed
 
-def criar_embed_partida(jogadores, modo_gelo, mediador, modo_jogo="1v1", valor_str="R$ 0,50"):
-    j1, j2 = jogadores[0], jogadores[1]
-    embed = discord.Embed(
-        title=f"⚔️ Partida Confirmada — {modo_jogo}",
-        color=discord.Color.green()
-    )
-    embed.add_field(name=f"{EMOJI_CONTROLE} Modo de Jogo", value=f"{modo_gelo}", inline=False)
-    embed.add_field(name=f"{EMOJI_DINHEIRO} Aposta", value=valor_str, inline=False)
-    embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=f"{j1.mention} vs {j2.mention}", inline=False)
-    embed.add_field(name="🛡️ Mediador", value=f"{mediador.mention}", inline=False)
-    embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
-    return embed
+class ConfirmarRecebimentoView(discord.ui.View):
+    def __init__(self, mediador, jogadores):
+        super().__init__(timeout=None)
+        self.mediador = mediador
+        self.jogadores = jogadores
+
+    @discord.ui.button(label="Não recebi", style=discord.ButtonStyle.danger, emoji="❌")
+    async def nao_recebi(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.mediador.id and str(interaction.user.id) != config_bot_dados.get("dono_id"):
+            await interaction.response.send_message("❌ Apenas o mediador pode usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_message(f"❌ **{self.mediador.mention} informou que NÃO recebeu o pagamento!** Verifiquem o envio.", ephemeral=False)
+
+    @discord.ui.button(label="Confirma recebimento", style=discord.ButtonStyle.success, emoji="✅")
+    async def confirma_recebimento(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.mediador.id and str(interaction.user.id) != config_bot_dados.get("dono_id"):
+            await interaction.response.send_message("❌ Apenas o mediador pode usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_message(f"✅ **{self.mediador.mention} confirmou o recebimento dos pagamentos!** Boa sorte na partida!", ephemeral=False)
 
 class ConfirmarPartidaView(discord.ui.View):
-    def __init__(self, jogadores, mediador):
+    def __init__(self, jogadores, mediador, valor_com_taxa_str, valor_base_str):
         super().__init__(timeout=None)
         self.jogadores = jogadores
         self.mediador = mediador
+        self.valor_com_taxa_str = valor_com_taxa_str
+        self.valor_base_str = valor_base_str
         self.confirmados = set()
 
     @discord.ui.button(label="Continuar", style=discord.ButtonStyle.success, emoji="✅")
@@ -439,28 +452,33 @@ class ConfirmarPartidaView(discord.ui.View):
             dados_pix = pix_mediadores.get(self.mediador.id) or pix_mediadores.get(str(self.mediador.id))
 
             embed_pix = discord.Embed(
-                title="💳 Realize o Pagamento",
-                color=discord.Color.gold()
+                color=discord.Color.from_rgb(40, 160, 90)
             )
+            embed_pix.title = "✅ Partida Confirmada"
+            embed_pix.add_field(name="⚔️ Estilo de Jogo", value="1x1", inline=False)
+            embed_pix.add_field(name="Informações da Aposta", value=f"Valor da Sala: {self.valor_base_str}\nMediador: {self.mediador.mention}", inline=False)
+            embed_pix.add_field(name="💰 Valor da Aposta", value=self.valor_com_taxa_str, inline=False)
+            embed_pix.add_field(name="👤 Jogadores", value=f"{self.jogadores[0].mention}\n{self.jogadores[1].mention}", inline=False)
 
             if not dados_pix:
-                embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix!\nUse o comando `/pix` para cadastrar antes de mediar."
-                embed_pix.color = discord.Color.red()
+                embed_pix.description = f"⚠️ {self.mediador.mention}, você ainda não cadastrou o seu Pix! Use o comando `/pix`."
+                if isinstance(interaction.channel, discord.Thread):
+                    await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
+                else:
+                    await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
             else:
-                embed_pix.description = "Ambos os jogadores confirmaram! Copie a chave abaixo para realizar o pagamento:"
-                embed_pix.add_field(name="👤 Nome no Banco", value=dados_pix["nome"], inline=False)
-                embed_pix.add_field(name="🔑 Pix Copia e Cola / Chave", value=f"```\n{dados_pix['chave']}\n```", inline=False)
-                
                 qr_link = dados_pix.get("qr")
                 if qr_link and qr_link.startswith("http"):
                     embed_pix.set_image(url=qr_link)
-                    
-                embed_pix.set_footer(text=f"Mediador responsável: {self.mediador.name}. Envie o comprovante aqui.")
 
-            if isinstance(interaction.channel, discord.Thread):
-                await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
-            else:
-                await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
+                if isinstance(interaction.channel, discord.Thread):
+                    msg_pix = await interaction.channel.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
+                else:
+                    msg_pix = await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
+
+                # Enviar chave Copia e Cola logo abaixo do Embed do Pix
+                if isinstance(interaction.channel, discord.Thread):
+                    await interaction.channel.send(f"🔑 **Pix Copia e Cola / Chave:**\n```\n{dados_pix['chave']}\n```\n*Envie o comprovante e digite **'pago'** aqui no chat assim que realizar o pagamento!*")
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -568,9 +586,18 @@ class FilaView(discord.ui.View):
 
             valor_com_taxa_num = self.valor_num + taxa_global_centavos
             valor_com_taxa_str = f"R$ {valor_com_taxa_num:.2f}".replace(".", ",")
+            valor_base_str = f"R$ {self.valor_num:.2f}".replace(".", ",")
 
-            embed_partida = criar_embed_partida(jogadores_partida, modo_gelo, mediador, modo_jogo=self.modo_jogo, valor_str=valor_com_taxa_str)
-            view_confirmacao = ConfirmarPartidaView(jogadores_partida, mediador)
+            embed_partida = discord.Embed(
+                color=discord.Color.from_rgb(40, 160, 90)
+            )
+            embed_partida.title = "✅ Partida Confirmada"
+            embed_partida.add_field(name="⚔️ Estilo de Jogo", value=f"{modo_gelo} ({self.modo_jogo})", inline=False)
+            embed_partida.add_field(name="Informações da Aposta", value=f"Valor da Sala: {valor_base_str}\nMediador: {mediador.mention}", inline=False)
+            embed_partida.add_field(name="💰 Valor da Aposta", value=valor_com_taxa_str, inline=False)
+            embed_partida.add_field(name="👤 Jogadores", value=f"{j1.mention}\n{j2.mention}", inline=False)
+
+            view_confirmacao = ConfirmarPartidaView(jogadores_partida, mediador, valor_com_taxa_str, valor_base_str)
 
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention} | Mediador: {mediador.mention}",
@@ -869,6 +896,58 @@ async def sala_criada(ctx):
 
     view = PainelMediadorView(membros_partida, ctx.channel.id)
     await ctx.send(embed=embed, view=view)
+
+# ------------------------------------------------------------------
+# EVENTO ON_MESSAGE: DETECTAR QUANDO OS JOGADORES DIZEM "PAGO"
+# ------------------------------------------------------------------
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Processar comandos tradicionais primeiro (.p, etc)
+    await bot.process_commands(message)
+
+    # Verificar se a mensagem foi enviada dentro de um tópico (Thread)
+    if isinstance(message.channel, discord.Thread):
+        thread_id = message.channel.id
+        
+        # Verificar se a mensagem contém "pago" ou "paguei"
+        conteudo = message.content.lower().strip()
+        if "pago" in conteudo or "paguei" in conteudo:
+            # Descobrir quem é o mediador e os jogadores verificando os membros do tópico
+            membros_nao_bot = [m for m in message.channel.members if not m.bot]
+            if len(membros_nao_bot) >= 3:
+                # O mediador costuma ser o último adicionado ou vamos filtrar (assumindo que o criador/mediador está no tópico)
+                # Vamos identificar os jogadores recolhendo do histórico inicial ou assumindo os 2 primeiros não-mediadores
+                # Alternativa robusta: procurar nos membros do tópico quem não é o criador ou verificar por ID nas views criadas.
+                # Aqui registramos o ID do usuário que disse "pago"
+                if thread_id not in pagamentos_pendentes:
+                    pagamentos_pendentes[thread_id] = set()
+                
+                pagamentos_pendentes[thread_id].add(message.author.id)
+
+                # Precisamos encontrar o mediador do tópico (procurando nos membros que possuem cargo ou simplesmente pegando o último membro adicionado)
+                # Como a ordem típica de adição foi: j1, j2, mediador -> o mediador é o último
+                mediador = membros_nao_bot[-1]
+                jogadores = membros_nao_bot[:2]
+
+                # Verificar se os 2 jogadores já disseram pago
+                jogadores_ids = {j.id for j in jogadores}
+                if jogadores_ids.issubset(pagamentos_pendentes[thread_id]):
+                    # Limpar para evitar spam contínuo
+                    pagamentos_pendentes[thread_id].clear()
+
+                    view_recebimento = ConfirmarRecebimentoView(mediador, jogadores)
+                    await message.channel.send(
+                        content=f"🔔 {mediador.mention}",
+                        embed=discord.Embed(
+                            title="💳 Confirmação de Pagamento",
+                            description="Ambos os jogadores informaram que pagaram! **(Confirme o recebimento)** abaixo:",
+                            color=discord.Color.gold()
+                        ),
+                        view=view_recebimento
+                    )
 
 @bot.event
 async def on_ready():
