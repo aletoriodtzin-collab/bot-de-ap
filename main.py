@@ -40,28 +40,32 @@ contador_filas_criadas = 0
 # ------------------------------------------------------------------
 config_bot_dados = {
     "dono_id": "1461858587080130663",
-    "cargo_comandos": None,
-    "cargo_criar_fila": None,
-    "cargo_criar_pix": None,
-    "cargo_config": None,
-    "cargo_entrar_med": None,
-    "cargo_cadastrar_pix": None,
-    "cargo_comando_p": None
+    "cargo_comandos": [],
+    "cargo_criar_fila": [],
+    "cargo_criar_pix": [],
+    "cargo_config": [],
+    "cargo_entrar_med": [],
+    "cargo_cadastrar_pix": [],
+    "cargo_comando_p": []
 }
 
 def verificar_permissao_global(user: discord.Member) -> bool:
-    """Verifica se o usuário é o dono do bot, administrador ou possui o cargo de mediador."""
+    """Verifica se o usuário é o dono do bot, administrador ou possui algum dos cargos configurados."""
     if str(user.id) == str(config_bot_dados.get("dono_id")):
         return True
     if user.guild_permissions.administrator:
         return True
     
-    cargos_permitidos = [
-        config_bot_dados.get("cargo_comandos"),
-        config_bot_dados.get("cargo_config"),
-        config_bot_dados.get("cargo_entrar_med"),
-        "mediador", "mediadores", "med"
-    ]
+    # Coleta todas as listas de cargos permitidos configuradas
+    cargos_permitidos = []
+    for chave in ["cargo_comandos", "cargo_config", "cargo_entrar_med", "cargo_criar_fila", "cargo_criar_pix", "cargo_cadastrar_pix", "cargo_comando_p"]:
+        val = config_bot_dados.get(chave)
+        if isinstance(val, list):
+            cargos_permitidos.extend(val)
+        elif val:
+            cargos_permitidos.append(val)
+            
+    cargos_permitidos.extend(["mediador", "mediadores", "med"])
     
     for r in user.roles:
         for c in cargos_permitidos:
@@ -76,30 +80,6 @@ class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
         style=discord.TextStyle.short,
         required=False
     )
-    cargo_comandos = discord.ui.TextInput(
-        label="Quem pode usar os comandos? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_criar_fila = discord.ui.TextInput(
-        label="Quem pode criar fila? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_criar_pix = discord.ui.TextInput(
-        label="Quem pode criar painel Pix? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_config = discord.ui.TextInput(
-        label="Quem pode mexer nas configs? (Cargo)",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
 
     async def on_submit(self, interaction: discord.Interaction):
         if not verificar_permissao_global(interaction.user):
@@ -108,83 +88,123 @@ class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
 
         if self.dono_id.value:
             config_bot_dados["dono_id"] = self.dono_id.value.strip()
-        if self.cargo_comandos.value:
-            config_bot_dados["cargo_comandos"] = self.cargo_comandos.value.strip()
-        if self.cargo_criar_fila.value:
-            config_bot_dados["cargo_criar_fila"] = self.cargo_criar_fila.value.strip()
-        if self.cargo_criar_pix.value:
-            config_bot_dados["cargo_criar_pix"] = self.cargo_criar_pix.value.strip()
-        if self.cargo_config.value:
-            config_bot_dados["cargo_config"] = self.cargo_config.value.strip()
 
         await interaction.response.send_message("✅ **Configurações do bot atualizadas com sucesso!**", ephemeral=True)
 
-class ConfigBotModalExtra(discord.ui.Modal, title="Configurações (Parte 2)"):
-    cargo_entrar_med = discord.ui.TextInput(
-        label="Cargos p/ entrar na fila de mediador",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_cadastrar_pix = discord.ui.TextInput(
-        label="Cargos p/ cadastrar o Pix",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-    cargo_comando_p = discord.ui.TextInput(
-        label="Cargos p/ acionar o comando .p",
-        placeholder="Nome ou ID do cargo...",
-        style=discord.TextStyle.short,
-        required=False
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Você não tem permissão para alterar estas configurações!", ephemeral=True)
-            return
-
-        if self.cargo_entrar_med.value:
-            config_bot_dados["cargo_entrar_med"] = self.cargo_entrar_med.value.strip()
-        if self.cargo_cadastrar_pix.value:
-            config_bot_dados["cargo_cadastrar_pix"] = self.cargo_cadastrar_pix.value.strip()
-        if self.cargo_comando_p.value:
-            config_bot_dados["cargo_comando_p"] = self.cargo_comando_p.value.strip()
-
-        await interaction.response.send_message("✅ **Configurações adicionais salvas com sucesso!**", ephemeral=True)
-
-class ConfigBotSelect(discord.ui.Select):
+# ------------------------------------------------------------------
+# SELECTS DE CARGOS MÚLTIPLOS (SUBSTITUINDO OS CAMPOS DE TEXTO)
+# ------------------------------------------------------------------
+class MultiRoleSelectComandos(discord.ui.RoleSelect):
     def __init__(self):
-        options = [
-            discord.SelectOption(label="Editar Configurações (1/2)", description="Modifica dono e cargos gerais", emoji="⚙️", value="config_1"),
-            discord.SelectOption(label="Editar Configurações (2/2)", description="Modifica cargos de med, pix e comando .p", emoji="🛡️", value="config_2"),
-            discord.SelectOption(label="Resetar total de filas", description="Zera o contador sequencial de filas", emoji="🗑️", value="resetar"),
-            discord.SelectOption(label="Gerar filas", description="Abre o painel para gerar 15 filas decrescentes", emoji="📁", value="gerar")
-        ]
-        super().__init__(placeholder="Selecione uma opção de configuração...", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="Selecione os cargos p/ usar comandos...", min_values=0, max_values=10)
 
     async def callback(self, interaction: discord.Interaction):
-        if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este menu!", ephemeral=True)
-            return
+        config_bot_dados["cargo_comandos"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
 
-        escolha = self.values[0]
+class MultiRoleSelectCriarFila(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ criar fila...", min_values=0, max_values=10)
 
-        if escolha == "config_1":
-            await interaction.response.send_modal(ConfigBotModal())
-        elif escolha == "config_2":
-            await interaction.response.send_modal(ConfigBotModalExtra())
-        elif escolha == "resetar":
-            global contador_filas_criadas
-            contador_filas_criadas = 0
-            await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
-        elif escolha == "gerar":
-            await interaction.response.send_modal(ModalCriarFilasDummy())
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_criar_fila"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class MultiRoleSelectCriarPix(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ criar painel Pix...", min_values=0, max_values=10)
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_criar_pix"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class MultiRoleSelectConfig(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ mexer nas configs...", min_values=0, max_values=10)
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_config"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class MultiRoleSelectEntrarMed(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ entrar na fila med...", min_values=0, max_values=10)
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_entrar_med"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class MultiRoleSelectCadastrarPix(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ cadastrar o Pix...", min_values=0, max_values=10)
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_cadastrar_pix"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class MultiRoleSelectComandoP(discord.ui.RoleSelect):
+    def __init__(self):
+        super().__init__(placeholder="Selecione os cargos p/ acionar o comando .p...", min_values=0, max_values=10)
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["cargo_comando_p"] = [str(r.id) for r in self.values]
+        await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
+
+class ConfigBotViewPart1(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(MultiRoleSelectComandos())
+        self.add_item(MultiRoleSelectCriarFila())
+        self.add_item(MultiRoleSelectCriarPix())
+        self.add_item(MultiRoleSelectConfig())
+
+class ConfigBotViewPart2(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(MultiRoleSelectEntrarMed())
+        self.add_item(MultiRoleSelectCadastrarPix())
+        self.add_item(MultiRoleSelectComandoP())
 
 class ConfigBotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(ConfigBotSelect())
+
+    @discord.ui.button(label="Definir Dono (ID)", style=discord.ButtonStyle.primary, emoji="⚙️")
+    async def abrir_config(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_modal(ConfigBotModal())
+
+    @discord.ui.button(label="Cargos Parte 1", style=discord.ButtonStyle.secondary, emoji="🛡️")
+    async def cargos_parte_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_message("📌 **Selecione abaixo os cargos para cada permissão (Parte 1):**", view=ConfigBotViewPart1(), ephemeral=True)
+
+    @discord.ui.button(label="Cargos Parte 2", style=discord.ButtonStyle.secondary, emoji="🛡️")
+    async def cargos_parte_2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
+        await interaction.response.send_message("📌 **Selecione abaixo os cargos para cada permissão (Parte 2):**", view=ConfigBotViewPart2(), ephemeral=True)
+
+    @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
+    async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem resetar as filas!", ephemeral=True)
+            return
+        global contador_filas_criadas
+        contador_filas_criadas = 0
+        await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
+
+    @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁")
+    async def gerar_filas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem gerar filas!", ephemeral=True)
+            return
+        await interaction.response.send_modal(ModalCriarFilasDummy())
 
 @bot.tree.command(name="config_bot", description="Painel de configurações gerais e permissões do bot")
 async def slash_config_bot(interaction: discord.Interaction):
@@ -192,19 +212,32 @@ async def slash_config_bot(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Você não tem permissão para acessar este painel de configuração!", ephemeral=True)
         return
 
+    def formatar_cargos(guild, lista_ids):
+        if not lista_ids:
+            return "Não definido"
+        nomes = []
+        for cid in lista_ids:
+            cargo = guild.get_role(int(cid)) if cid.isdigit() else None
+            if cargo:
+                nomes.append(cargo.mention)
+            else:
+                nomes.append(f"ID: {cid}")
+        return ", ".join(nomes)
+
+    guild = interaction.guild
     embed = discord.Embed(
         title="⚙️ Painel de Configurações do Bot",
         description="Gerencie abaixo quem tem permissão para executar ações, administrar o servidor e gerenciar filas.",
         color=discord.Color.blurple()
     )
     embed.add_field(name="👤 Dono do Bot (ID)", value=config_bot_dados["dono_id"] or "Não definido", inline=False)
-    embed.add_field(name="⌨️ Cargo p/ Comandos", value=config_bot_dados["cargo_comandos"] or "Não definido", inline=True)
-    embed.add_field(name="➔ Cargo p/ Criar Fila", value=config_bot_dados["cargo_criar_fila"] or "Não definido", inline=True)
-    embed.add_field(name="💳 Cargo p/ Painel Pix", value=config_bot_dados["cargo_criar_pix"] or "Não definido", inline=True)
-    embed.add_field(name="🔧 Cargo p/ Mexer Config", value=config_bot_dados["cargo_config"] or "Não definido", inline=True)
-    embed.add_field(name="🛡️ Cargo p/ Entrar Fila Med", value=config_bot_dados["cargo_entrar_med"] or "Não definido", inline=True)
-    embed.add_field(name="💰 Cargo p/ Cadastrar Pix", value=config_bot_dados["cargo_cadastrar_pix"] or "Não definido", inline=True)
-    embed.add_field(name="📊 Cargo p/ Comando .p", value=config_bot_dados["cargo_comando_p"] or "Não definido", inline=True)
+    embed.add_field(name="⌨️ Cargo p/ Comandos", value=formatar_cargos(guild, config_bot_dados["cargo_comandos"]), inline=True)
+    embed.add_field(name="➔ Cargo p/ Criar Fila", value=formatar_cargos(guild, config_bot_dados["cargo_criar_fila"]), inline=True)
+    embed.add_field(name="💳 Cargo p/ Painel Pix", value=formatar_cargos(guild, config_bot_dados["cargo_criar_pix"]), inline=True)
+    embed.add_field(name="🔧 Cargo p/ Mexer Config", value=formatar_cargos(guild, config_bot_dados["cargo_config"]), inline=True)
+    embed.add_field(name="🛡️ Cargo p/ Entrar Fila Med", value=formatar_cargos(guild, config_bot_dados["cargo_entrar_med"]), inline=True)
+    embed.add_field(name="💰 Cargo p/ Cadastrar Pix", value=formatar_cargos(guild, config_bot_dados["cargo_cadastrar_pix"]), inline=True)
+    embed.add_field(name="📊 Cargo p/ Comando .p", value=formatar_cargos(guild, config_bot_dados["cargo_comando_p"]), inline=True)
     embed.add_field(name="📁 Filas Criadas Atualmente", value=str(contador_filas_criadas), inline=False)
 
     view = ConfigBotView()
@@ -806,7 +839,7 @@ async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo desejado:", view=view_modo, ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDOS SLASH /painel_sala e /finalizar_sala)
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR
 # ------------------------------------------------------------------
 class VencedorSelect(discord.ui.Select):
     def __init__(self, membros):
@@ -819,31 +852,32 @@ class VencedorSelect(discord.ui.Select):
             return
 
         vencedor_id = int(self.values[0])
-        vencedor = interaction.guild.get_member(vencedor_id) or await interaction.guild.fetch_member(vencedor_id)
+        ganhador = interaction.guild.get_member(vencedor_id) or await interaction.guild.fetch_member(vencedor_id)
         
-        if vencedor.id not in estatisticas_jogadores:
-            estatisticas_jogadores[vencedor.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
+        if ganhador.id not in estatisticas_jogadores:
+            estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
         
-        estatisticas_jogadores[vencedor.id]["vitorias"] += 1
-        estatisticas_jogadores[vencedor.id]["coins"] += 1
-        estatisticas_jogadores[vencedor.id]["streak_atual"] += 1
+        estatisticas_jogadores[ganhador.id]["vitorias"] += 1
+        estatisticas_jogadores[ganhador.id]["coins"] += 1
+        estatisticas_jogadores[ganhador.id]["streak_atual"] += 1
         
-        if estatisticas_jogadores[vencedor.id]["streak_atual"] > estatisticas_jogadores[vencedor.id]["streak"]:
-            estatisticas_jogadores[vencedor.id]["streak"] = estatisticas_jogadores[vencedor.id]["streak_atual"]
+        if estatisticas_jogadores[ganhador.id]["streak_atual"] > estatisticas_jogadores[ganhador.id]["streak"]:
+            estatisticas_jogadores[ganhador.id]["streak"] = estatisticas_jogadores[ganhador.id]["streak_atual"]
 
         thread_id = interaction.channel.id
         ids_partida = jogadores_partidas.get(thread_id, [])
         for pid in ids_partida:
-            if pid != vencedor.id:
+            if pid != ganhador.id:
                 if pid not in estatisticas_jogadores:
                     estatisticas_jogadores[pid] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
                 estatisticas_jogadores[pid]["derrotas"] += 1
                 estatisticas_jogadores[pid]["streak_atual"] = 0
 
         await interaction.response.send_message(
-            f"🏆 **Vencedor Definido:** {vencedor.mention}\n"
-            f"📈 **Vitórias Consecutivas:** {estatisticas_jogadores[vencedor.id]['streak_atual']}\n"
-            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[vencedor.id]['vitorias']}\n"
+            f"🏆 **Vencedor Definido com Sucesso!**\n"
+            f"👑 **Jogador:** {ganhador.mention}\n"
+            f"📈 **Vitórias Consecutivas:** {estatisticas_jogadores[ganhador.id]['streak_atual']}\n"
+            f"🏆 **Vitórias Totais:** {estatisticas_jogadores[ganhador.id]['vitorias']}\n"
             f"🪙 **Coins:** +1", 
             ephemeral=False
         )
@@ -856,15 +890,15 @@ class ViewVencedor(discord.ui.View):
 class WoSelect(discord.ui.Select):
     def __init__(self, membros):
         options = [discord.SelectOption(label=m.display_name, value=str(m.id)) for m in membros]
-        super().__init__(placeholder="Selecione o ganhador por W.O...", options=options, min_values=1, max_values=1)
+        super().__init__(placeholder="Selecione quem ganhou por W.O...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
         if not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Apenas mediadores podem definir o W.O!", ephemeral=True)
             return
 
-        ganhador_id = int(self.values[0])
-        ganhador = interaction.guild.get_member(ganhador_id) or await interaction.guild.fetch_member(ganhador_id)
+        vencedor_id = int(self.values[0])
+        ganhador = interaction.guild.get_member(vencedor_id) or await interaction.guild.fetch_member(vencedor_id)
         
         if ganhador.id not in estatisticas_jogadores:
             estatisticas_jogadores[ganhador.id] = {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0}
