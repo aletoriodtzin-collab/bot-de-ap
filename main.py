@@ -16,10 +16,10 @@ TAMANHO_MAXIMO = 2
 # Dicionário para armazenar o Pix de cada mediador cadastrado
 pix_mediadores = {}
 
-# Dicionário para armazenar estatísticas dos jogadores (Vitórias, Derrotas, Streak, Coins)
+# Dicionário para armazenar estatísticas dos jogadores
 estatisticas_jogadores = {}
 
-# Dicionário para armazenar o valor da aposta de cada tópico/partida ativa (ex: {thread_id: 10.50})
+# Dicionário para armazenar o valor da aposta de cada tópico/partida ativa
 valores_apostas_partidas = {}
 
 # Dicionários de controle para o sistema de pagamento nos tópicos
@@ -36,7 +36,7 @@ mensagem_painel_med = None
 contador_filas_criadas = 0
 
 # ------------------------------------------------------------------
-# CONFIGURAÇÕES DO BOT (COMANDO /config_bot)
+# CONFIGURAÇÕES DO BOT
 # ------------------------------------------------------------------
 config_bot_dados = {
     "dono_id": "1461858587080130663",
@@ -48,6 +48,27 @@ config_bot_dados = {
     "cargo_cadastrar_pix": None,
     "cargo_comando_p": None
 }
+
+def verificar_permissao_global(user: discord.Member) -> bool:
+    """Verifica se o usuário é o dono do bot, administrador ou possui o cargo de mediador."""
+    if str(user.id) == str(config_bot_dados.get("dono_id")):
+        return True
+    if user.guild_permissions.administrator:
+        return True
+    
+    # Verifica cargos de mediadores comuns ou configurados
+    cargos_permitidos = [
+        config_bot_dados.get("cargo_comandos"),
+        config_bot_dados.get("cargo_config"),
+        config_bot_dados.get("cargo_entrar_med"),
+        "mediador", "mediadores", "med"
+    ]
+    
+    for r in user.roles:
+        for c in cargos_permitidos:
+            if c and (str(r.id) == str(c) or r.name.lower() == str(c).lower()):
+                return True
+    return False
 
 class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
     dono_id = discord.ui.TextInput(
@@ -82,6 +103,10 @@ class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Você não tem permissão para alterar estas configurações!", ephemeral=True)
+            return
+
         if self.dono_id.value:
             config_bot_dados["dono_id"] = self.dono_id.value.strip()
         if self.cargo_comandos.value:
@@ -116,6 +141,10 @@ class ConfigBotModalExtra(discord.ui.Modal, title="Configurações (Parte 2)"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Você não tem permissão para alterar estas configurações!", ephemeral=True)
+            return
+
         if self.cargo_entrar_med.value:
             config_bot_dados["cargo_entrar_med"] = self.cargo_entrar_med.value.strip()
         if self.cargo_cadastrar_pix.value:
@@ -131,24 +160,40 @@ class ConfigBotView(discord.ui.View):
 
     @discord.ui.button(label="Editar Configurações (1/2)", style=discord.ButtonStyle.primary, emoji="⚙️")
     async def abrir_config(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
         await interaction.response.send_modal(ConfigBotModal())
 
     @discord.ui.button(label="Editar Configurações (2/2)", style=discord.ButtonStyle.secondary, emoji="🛡️")
     async def abrir_config_extra(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
+            return
         await interaction.response.send_modal(ConfigBotModalExtra())
 
     @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem resetar as filas!", ephemeral=True)
+            return
         global contador_filas_criadas
         contador_filas_criadas = 0
         await interaction.response.send_message("🗑️ **O contador total de filas foi resetado para 0 com sucesso!**", ephemeral=True)
 
     @discord.ui.button(label="Gerar filas", style=discord.ButtonStyle.success, emoji="📁")
     async def gerar_filas_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem gerar filas!", ephemeral=True)
+            return
         await interaction.response.send_modal(ModalCriarFilasDummy())
 
 @bot.tree.command(name="config_bot", description="Painel de configurações gerais e permissões do bot")
 async def slash_config_bot(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Você não tem permissão para acessar este painel de configuração!", ephemeral=True)
+        return
+
     embed = discord.Embed(
         title="⚙️ Painel de Configurações do Bot",
         description="Gerencie abaixo quem tem permissão para executar ações, administrar o servidor e gerenciar filas.",
@@ -179,9 +224,8 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        dono_id = config_bot_dados.get("dono_id", "1461858587080130663")
-        if str(interaction.user.id) != str(dono_id):
-            await interaction.response.send_message("❌ Apenas o dono do bot pode alterar a taxa!", ephemeral=True)
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem alterar a taxa!", ephemeral=True)
             return
 
         global taxa_global_centavos
@@ -204,8 +248,7 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
 
 @bot.tree.command(name="configura_taxar", description="Configura o valor da taxa aplicada aos reembolsos/apostas")
 async def slash_configura_taxar(interaction: discord.Interaction):
-    dono_id = config_bot_dados.get("dono_id", "1461858587080130663")
-    if str(interaction.user.id) != str(dono_id):
+    if not verificar_permissao_global(interaction.user):
         await interaction.response.send_message("❌ Você não tem permissão para usar este comando!", ephemeral=True)
         return
     await interaction.response.send_modal(ModalConfiguraTaxa())
@@ -220,17 +263,9 @@ EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 # ------------------------------------------------------------------
 @bot.command(name="p")
 async def comando_p(ctx, membro: discord.Member = None):
-    cargo_comandos = config_bot_dados.get("cargo_comandos")
-    if cargo_comandos and not any(str(c.id) == cargo_comandos or c.name.lower() == cargo_comandos.lower() for c in ctx.author.roles):
-        if str(ctx.author.id) != config_bot_dados.get("dono_id"):
-            await ctx.send("❌ Você não possui o cargo necessário para executar comandos do bot!", delete_after=5)
-            return
-
-    cargo_req = config_bot_dados.get("cargo_comando_p")
-    if cargo_req and not any(str(c.id) == cargo_req or c.name.lower() == cargo_req.lower() for c in ctx.author.roles):
-        if str(ctx.author.id) != config_bot_dados.get("dono_id"):
-            await ctx.send(f"❌ Você não possui o cargo necessário (**{cargo_req}**) para usar o comando `.p`!", delete_after=5)
-            return
+    if not verificar_permissao_global(ctx.author):
+        await ctx.send("❌ Você não possui permissão para usar o comando `.p`!", delete_after=5)
+        return
 
     alvo = membro if membro else ctx.author
     stats = estatisticas_jogadores.get(alvo.id, {"vitorias": 0, "derrotas": 0, "streak": 0, "streak_atual": 0, "coins": 0})
@@ -274,9 +309,8 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        cargo_req = config_bot_dados.get("cargo_cadastrar_pix")
-        if cargo_req and not any(str(c.id) == cargo_req or c.name.lower() == cargo_req.lower() for c in interaction.user.roles):
-            await interaction.response.send_message(f"❌ Você não possui o cargo necessário (**{cargo_req}**) para cadastrar o Pix!", ephemeral=True)
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem cadastrar o Pix!", ephemeral=True)
             return
 
         chave = self.chave_pix.value
@@ -307,10 +341,17 @@ class PixView(discord.ui.View):
 
     @discord.ui.button(label="Cadastrar Meu Pix", style=discord.ButtonStyle.success, emoji="💳")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem cadastrar o Pix!", ephemeral=True)
+            return
         await interaction.response.send_modal(FormularioPixModal())
 
 @bot.tree.command(name="pix", description="Cadastre o seu Pix para receber os pagamentos das partidas")
 async def slash_pix(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Apenas mediadores podem usar este comando!", ephemeral=True)
+        return
+
     embed = discord.Embed(
         title="💳 Cadastro de Pix do Mediador",
         description="Clique no botão abaixo para cadastrar o seu Pix. É para este Pix que os jogadores farão o pagamento das partidas que você mediar!",
@@ -319,7 +360,7 @@ async def slash_pix(interaction: discord.Interaction):
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
 
     view = PixView()
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ------------------------------------------------------------------
 # PAINEL DA FILA DE MEDIADORES (/med)
@@ -327,7 +368,7 @@ async def slash_pix(interaction: discord.Interaction):
 def criar_embed_mediadores():
     embed = discord.Embed(
         title="🛡️ Fila de Mediadores",
-        description="Você taxa que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
+        description="Você tem que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
         color=discord.Color.blue()
     )
     
@@ -353,9 +394,8 @@ class MedView(discord.ui.View):
 
     @discord.ui.button(label="Entrar na Fila", style=discord.ButtonStyle.primary, emoji="🛡️")
     async def entrar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        cargo_req = config_bot_dados.get("cargo_entrar_med")
-        if cargo_req and not any(str(c.id) == cargo_req or c.name.lower() == cargo_req.lower() for c in interaction.user.roles):
-            await interaction.response.send_message(f"❌ Você não possui o cargo necessário (**{cargo_req}**) para entrar na fila de mediadores!", ephemeral=True)
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem entrar na fila de mediação!", ephemeral=True)
             return
 
         if interaction.user in fila_mediadores:
@@ -380,8 +420,12 @@ class MedView(discord.ui.View):
 
 @bot.tree.command(name="med", description="Abre o painel da fila de mediadores")
 async def slash_med(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Apenas mediadores podem usar este comando!", ephemeral=True)
+        return
+
     global mensagem_painel_med
-    await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView())
+    await interaction.response.send_message(embed=criar_embed_mediadores(), view=MedView(), ephemeral=True)
     mensagem_painel_med = await interaction.original_response()
 
 # ------------------------------------------------------------------
@@ -398,7 +442,8 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        texto_jogadores = "\n".join([f"• {j.mention}" for j in fila_jogadores])
+        linhas = [f"• {j.display_name} | {gelo}" for j, gelo in fila_jogadores]
+        texto_jogadores = "\n".join(linhas)
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
     embed.set_thumbnail(url="https://cdn.discordapp.com/embed/avatars/0.png")
@@ -411,14 +456,14 @@ class ConfirmarRecebimentoView(discord.ui.View):
 
     @discord.ui.button(label="Não recebi", style=discord.ButtonStyle.danger, emoji="❌")
     async def nao_recebi(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.mediador.id and str(interaction.user.id) != config_bot_dados.get("dono_id"):
+        if interaction.user.id != self.mediador.id and not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Apenas o mediador pode usar este botão!", ephemeral=True)
             return
         await interaction.response.send_message(f"❌ **{self.mediador.mention} informou que NÃO recebeu o pagamento!** Verifiquem o envio.", ephemeral=False)
 
     @discord.ui.button(label="Confirma recebimento", style=discord.ButtonStyle.success, emoji="✅")
     async def confirma_recebimento(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.mediador.id and str(interaction.user.id) != config_bot_dados.get("dono_id"):
+        if interaction.user.id != self.mediador.id and not verificar_permissao_global(interaction.user):
             await interaction.response.send_message("❌ Apenas o mediador pode usar este botão!", ephemeral=True)
             return
         await interaction.response.send_message(f"✅ **{self.mediador.mention} confirmou o recebimento dos pagamentos!** Boa sorte na partida!", ephemeral=False)
@@ -483,7 +528,7 @@ class ConfirmarPartidaView(discord.ui.View):
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-        if user not in self.jogadores and user != self.mediador:
+        if user not in self.jogadores and not verificar_permissao_global(user):
             await interaction.response.send_message("❌ Você não tem permissão para cancelar esta partida!", ephemeral=True)
             return
 
@@ -513,17 +558,23 @@ class FilaView(discord.ui.View):
 
     @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.entrar_na_fila(interaction, "Gelo Normal")
+        await self.entrar_na_fila(interaction, "gelo normal")
 
     @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.entrar_na_fila(interaction, "Gelo Infinito")
+        await self.entrar_na_fila(interaction, "gelo infinito")
 
     @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
     async def sair_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = interaction.user
-        if user in fila_jogadores:
-            fila_jogadores.remove(user)
+        encontrado = None
+        for item in fila_jogadores:
+            if item[0].id == user.id:
+                encontrado = item
+                break
+
+        if encontrado:
+            fila_jogadores.remove(encontrado)
             embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
             await interaction.response.edit_message(embed=embed_atualizado, view=self)
             await interaction.followup.send(f"🚪 {user.mention} saiu da fila.", ephemeral=True)
@@ -534,7 +585,7 @@ class FilaView(discord.ui.View):
         global contador_filas_criadas
         user = interaction.user
 
-        if user in fila_jogadores:
+        if any(item[0].id == user.id for item in fila_jogadores):
             await interaction.response.send_message("⚠️ Você já está na fila!", ephemeral=True)
             return
 
@@ -542,7 +593,7 @@ class FilaView(discord.ui.View):
             await interaction.response.send_message("❌ A fila já está cheia!", ephemeral=True)
             return
 
-        fila_jogadores.append(user)
+        fila_jogadores.append((user, modo_gelo))
 
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             if not fila_mediadores:
@@ -554,7 +605,7 @@ class FilaView(discord.ui.View):
             fila_mediadores.append(mediador)
             await atualizar_painel_mediadores()
 
-            jogadores_partida = fila_jogadores.copy()
+            jogadores_partida = [j[0] for j in fila_jogadores]
             fila_jogadores.clear()
 
             await interaction.response.edit_message(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
@@ -594,7 +645,7 @@ class FilaView(discord.ui.View):
                 color=discord.Color.from_rgb(40, 160, 90)
             )
             embed_partida.title = "✅ Partida Confirmada"
-            embed_partida.add_field(name="⚔️ Estilo de Jogo", value=f"{modo_gelo} ({self.modo_jogo})", inline=False)
+            embed_partida.add_field(name="⚔️ Estilo de Jogo", value=f"{modo_gelo.capitalize()} ({self.modo_jogo})", inline=False)
             embed_partida.add_field(name="Informações da Aposta", value=f"Valor da Sala: {valor_base_str}\nMediador: {mediador.mention}", inline=False)
             embed_partida.add_field(name="💰 Valor da Aposta", value=valor_com_taxa_str, inline=False)
             embed_partida.add_field(name="👤 Jogadores", value=f"{j1.mention}\n{j2.mention}", inline=False)
@@ -625,6 +676,10 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem gerar filas!", ephemeral=True)
+            return
+
         canal_selecionado = interaction.guild.get_channel(self.values[0].id)
         
         if not canal_selecionado:
@@ -676,6 +731,10 @@ class ModalNomeEValores(discord.ui.Modal, title="Configurar Nome e Valores"):
         self.modo = modo
 
     async def on_submit(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem configurar filas!", ephemeral=True)
+            return
+
         try:
             nome_fila = self.nome_fila_input.value.strip()
             input_cru = self.valores_input.value.strip()
@@ -724,6 +783,9 @@ class SelectModoFila(discord.ui.Select):
         super().__init__(placeholder="Escolha o modo de jogo (1v1, 2v2, 3v3 ou 4v4)", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem gerar filas!", ephemeral=True)
+            return
         modo = self.values[0]
         await interaction.response.send_modal(ModalNomeEValores(modo))
 
@@ -738,11 +800,15 @@ class ModalCriarFilasDummy(discord.ui.Modal, title="Gerar Filas"):
 
 @bot.tree.command(name="criar_15_filas", description="Gera 15 filas escolhendo primeiro o modo de jogo em um único canal")
 async def slash_criar_15_filas(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Apenas mediadores podem usar este comando!", ephemeral=True)
+        return
+
     view_modo = ViewSelecaoModoFila()
     await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo desejado:", view=view_modo, ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (!finalizar_sala)
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDO SLASH /painel_sala)
 # ------------------------------------------------------------------
 class VencedorSelect(discord.ui.Select):
     def __init__(self, membros):
@@ -750,6 +816,10 @@ class VencedorSelect(discord.ui.Select):
         super().__init__(placeholder="Selecione o jogador vencedor...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem definir o vencedor!", ephemeral=True)
+            return
+
         vencedor_id = int(self.values[0])
         vencedor = interaction.guild.get_member(vencedor_id) or await interaction.guild.fetch_member(vencedor_id)
         
@@ -790,6 +860,10 @@ class WoSelect(discord.ui.Select):
         super().__init__(placeholder="Selecione o ganhador por W.O...", options=options, min_values=1, max_values=1)
 
     async def callback(self, interaction: discord.Interaction):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem definir o W.O!", ephemeral=True)
+            return
+
         ganhador_id = int(self.values[0])
         ganhador = interaction.guild.get_member(ganhador_id) or await interaction.guild.fetch_member(ganhador_id)
         
@@ -832,8 +906,8 @@ class PainelMediadorView(discord.ui.View):
         self.mediador_id = mediador_id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.mediador_id and str(interaction.user.id) != str(config_bot_dados.get("dono_id")):
-            await interaction.response.send_message("❌ Apenas o mediador responsável por esta sala pode usar estes botões!", ephemeral=True)
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas mediadores podem usar estes botões!", ephemeral=True)
             return False
         return True
 
@@ -855,9 +929,7 @@ class PainelMediadorView(discord.ui.View):
 
     @discord.ui.button(label="Reembolsar e finalizar", style=discord.ButtonStyle.secondary, emoji="💸")
     async def botao_reembolso(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # O valor base da aposta (ex: 10,00 se o total com taxa era 10,10)
         valor_base = valores_apostas_partidas.get(self.thread_id, 0.50)
-        
         valor_str = f"R$ {valor_base:.2f}".replace(".", ",")
         taxa_centavos_exibicao = int(round(taxa_global_centavos * 100))
 
@@ -869,11 +941,11 @@ class PainelMediadorView(discord.ui.View):
             ),
             color=discord.Color.gold()
         )
-        await interaction.response.send_message(embed=embed_reembolso, ephemeral=False)
+        await interaction.response.send_message(embed=embed_reembolso, ephemeral=True)
 
     @discord.ui.button(label="Finalizar partida", style=discord.ButtonStyle.danger, emoji="🔒")
     async def botao_finalizar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔒 **A partida foi finalizada. Deletando o tópico em instantes...**", ephemeral=False)
+        await interaction.response.send_message("🔒 **A partida foi finalizada. Deletando o tópico em instantes...**", ephemeral=True)
         if isinstance(interaction.channel, discord.Thread):
             import asyncio
             await asyncio.sleep(2)
@@ -882,13 +954,43 @@ class PainelMediadorView(discord.ui.View):
             except Exception:
                 pass
 
+@bot.tree.command(name="painel_sala", description="Abre o painel de controle da sala")
+async def slash_painel_sala(interaction: discord.Interaction):
+    if not verificar_permissao_global(interaction.user):
+        await interaction.response.send_message("❌ Apenas mediadores podem usar este comando!", ephemeral=True)
+        return
+
+    if not isinstance(interaction.channel, discord.Thread):
+        await interaction.response.send_message("❌ Este comando só pode ser utilizado dentro do tópico da partida!", ephemeral=True)
+        return
+
+    thread_id = interaction.channel.id
+    mediador_atribuido = mediadores_partidas.get(thread_id)
+
+    membros_partida = [m for m in interaction.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
+
+    embed = discord.Embed(
+        title="⚙️ Painel de Controle do Mediador",
+        description="Utilize os botões abaixo para gerenciar a partida:",
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text="Painel exclusivo para controle do Mediador.")
+
+    mediador_id = mediador_atribuido.id if mediador_atribuido else interaction.user.id
+    view = PainelMediadorView(membros_partida, thread_id, mediador_id)
+    
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 @bot.command(name="finalizar_sala")
 async def finalizar_sala(ctx):
-    # Apaga a mensagem digitada pelo usuário e a mensagem padrão de criação de tópico do Discord se houver
     try:
         await ctx.message.delete()
     except Exception:
         pass
+
+    if not verificar_permissao_global(ctx.author):
+        await ctx.send("❌ Apenas mediadores podem usar este comando!", delete_after=5)
+        return
 
     if not isinstance(ctx.channel, discord.Thread):
         await ctx.send("❌ Este comando só pode ser utilizado dentro do tópico da partida!", delete_after=5)
@@ -897,13 +999,6 @@ async def finalizar_sala(ctx):
     thread_id = ctx.channel.id
     mediador_atribuido = mediadores_partidas.get(thread_id)
 
-    # Valida se quem chamou é o mediador da sala ou o dono do bot
-    is_dono = str(ctx.author.id) == str(config_bot_dados.get("dono_id"))
-    if mediador_atribuido and ctx.author.id != mediador_atribuido.id and not is_dono:
-        await ctx.send("❌ Apenas o mediador responsável por esta sala pode usar o comando `!finalizar_sala`!", delete_after=5)
-        return
-
-    # Filtra apenas os jogadores reais no tópico (excluindo bots e o próprio mediador se estiver na lista)
     membros_partida = [m for m in ctx.channel.members if not m.bot and (not mediador_atribuido or m.id != mediador_atribuido.id)]
 
     embed = discord.Embed(
@@ -916,16 +1011,7 @@ async def finalizar_sala(ctx):
     mediador_id = mediador_atribuido.id if mediador_atribuido else ctx.author.id
     view = PainelMediadorView(membros_partida, thread_id, mediador_id)
     
-    msg_painel = await ctx.send(embed=embed, view=view)
-
-    # Tenta apagar a mensagem automática do sistema do Discord ("Bot iniciou um tópico")
-    try:
-        async for msg in ctx.channel.history(limit=20, oldest_first=True):
-            if msg.type == discord.MessageType.thread_created and msg.id != msg_painel.id:
-                await msg.delete()
-                break
-    except Exception:
-        pass
+    await ctx.send(embed=embed, view=view)
 
 # ------------------------------------------------------------------
 # EVENTO ON_MESSAGE: DETECTAR QUANDO OS JOGADORES DIZEM "PAGO"
