@@ -362,7 +362,7 @@ async def slash_pix(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
-# PAINEL DA FILA DE MEDIADORES (/med)
+# PAINEL DA FILA DE MEDIADORES (/med) - ORDENADO DE BAIXO PARA CIMA
 # ------------------------------------------------------------------
 def criar_embed_mediadores():
     embed = discord.Embed(
@@ -374,7 +374,9 @@ def criar_embed_mediadores():
     if not fila_mediadores:
         texto = "*Nenhum mediador disponível no momento.*"
     else:
-        texto = "\n".join([f"{i+1}- {m.mention}" for i, m in enumerate(fila_mediadores)])
+        # Inverte a lista [::-1] para que os novos mediadores subam de baixo para cima
+        mediadores_invertidos = list(enumerate(fila_mediadores))[::-1]
+        texto = "\n".join([f"{i+1}- {m.mention}" for i, m in mediadores_invertidos])
     
     embed.add_field(name="Mediadores em espera:", value=texto, inline=False)
     return embed
@@ -428,7 +430,7 @@ async def slash_med(interaction: discord.Interaction):
     mensagem_painel_med = await interaction.original_response()
 
 # ------------------------------------------------------------------
-# ESTRUTURA DA FILA DE PARTIDA
+# ESTRUTURA DA FILA DE PARTIDA - ORDENADO DE BAIXO PARA CIMA
 # ------------------------------------------------------------------
 def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_aposta="R$ 0,50"):
     embed = discord.Embed(
@@ -441,8 +443,9 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        # CORREÇÃO: Utilizando j.mention para o nome ficar azul e marcado corretamente
-        linhas = [f"• {j.mention} | {gelo}" for j, gelo in fila_jogadores]
+        # Inverte a listagem de jogadores para empilhar de baixo para cima ([::-1])
+        jogadores_invertidos = fila_jogadores[::-1]
+        linhas = [f"• {j.display_name} | {gelo}" for j, gelo in jogadores_invertidos]
         texto_jogadores = "\n".join(linhas)
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
@@ -808,7 +811,7 @@ async def slash_criar_15_filas(interaction: discord.Interaction):
     await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo desejado:", view=view_modo, ephemeral=True)
 
 # ------------------------------------------------------------------
-# PAINEL DE CONTROLE DA SALA DO MEDIADOR (COMANDOS SLASH /painel_sala e /finalizar_sala)
+# PAINEL DE CONTROLE DA SALA DO MEDIADOR
 # ------------------------------------------------------------------
 class VencedorSelect(discord.ui.Select):
     def __init__(self, membros):
@@ -976,6 +979,7 @@ async def slash_painel_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
+    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
@@ -1007,6 +1011,7 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
         return
 
     thread_id = interaction.channel.id
+    
     ids_jogadores = jogadores_partidas.get(thread_id, [])
     membros_partida = []
     for j_id in ids_jogadores:
