@@ -898,61 +898,71 @@ class ViewWo(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(WoSelect(membros))
 
-class PainelMediadorView(discord.ui.View):
+# Menu de Seleção (Dropdown) para substituir os botões do !finalizar_sala / /painel_sala
+class PainelMediadorSelect(discord.ui.Select):
     def __init__(self, membros_partida, thread_id, mediador_id):
-        super().__init__(timeout=None)
         self.membros_partida = membros_partida
         self.thread_id = thread_id
         self.mediador_id = mediador_id
+        
+        options = [
+            discord.SelectOption(label="Escolher o vencedor", value="vencedor", description="Define o jogador vencedor da partida", emoji="🏆"),
+            discord.SelectOption(label="Dar vitória por w.o", value="wo", description="Define a vitória por W.O", emoji="⚠️"),
+            discord.SelectOption(label="Reembolsar e finalizar", value="reembolso", description="Mostra o valor para reembolso", emoji="💸"),
+            discord.SelectOption(label="Finalizar partida", value="finalizar", description="Finaliza e deleta o tópico", emoji="🔒")
+        ]
+        super().__init__(placeholder="Selecione uma opção de gerenciamento...", options=options, min_values=1, max_values=1)
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def callback(self, interaction: discord.Interaction):
         if not verificar_permissao_global(interaction.user):
-            await interaction.response.send_message("❌ Apenas mediadores podem usar estes botões!", ephemeral=True)
-            return False
-        return True
-
-    @discord.ui.button(label="Escolher o vencedor", style=discord.ButtonStyle.success, emoji="🏆")
-    async def botao_vencedor(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.membros_partida:
-            await interaction.response.send_message("❌ Nenhum jogador elegível encontrado neste tópico.", ephemeral=True)
+            await interaction.response.send_message("❌ Apenas mediadores podem usar estas opções!", ephemeral=True)
             return
-        view = ViewVencedor(self.membros_partida)
-        await interaction.response.send_message("👇 Escolha abaixo o jogador **Vencedor**:", view=view, ephemeral=True)
 
-    @discord.ui.button(label="Dar vitória por w.o", style=discord.ButtonStyle.primary, emoji="⚠️")
-    async def botao_wo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.membros_partida:
-            await interaction.response.send_message("❌ Nenhum jogador elegível encontrado neste tópico.", ephemeral=True)
-            return
-        view = ViewWo(self.membros_partida)
-        await interaction.response.send_message("👇 Escolha abaixo quem ganhou por **W.O**:", view=view, ephemeral=True)
+        escolha = self.values[0]
 
-    @discord.ui.button(label="Reembolsar e finalizar", style=discord.ButtonStyle.secondary, emoji="💸")
-    async def botao_reembolso(self, interaction: discord.Interaction, button: discord.ui.Button):
-        valor_base = valores_apostas_partidas.get(self.thread_id, 0.50)
-        valor_str = f"R$ {valor_base:.2f}".replace(".", ",")
-        taxa_centavos_exibicao = int(round(taxa_global_centavos * 100))
+        if escolha == "vencedor":
+            if not self.membros_partida:
+                await interaction.response.send_message("❌ Nenhum jogador elegível encontrado neste tópico.", ephemeral=True)
+                return
+            view = ViewVencedor(self.membros_partida)
+            await interaction.response.send_message("👇 Escolha abaixo o jogador **Vencedor**:", view=view, ephemeral=True)
 
-        embed_reembolso = discord.Embed(
-            title="💸 Reembolso Solicitado",
-            description=(
-                f"O valor exato para o reembolso (descontando a taxa de {taxa_centavos_exibicao}c) é:\n\n"
-                f"🔑 **Valor do Reembolso:** `{valor_str}`"
-            ),
-            color=discord.Color.gold()
-        )
-        await interaction.response.send_message(embed=embed_reembolso, ephemeral=True)
+        elif escolha == "wo":
+            if not self.membros_partida:
+                await interaction.response.send_message("❌ Nenhum jogador elegível encontrado neste tópico.", ephemeral=True)
+                return
+            view = ViewWo(self.membros_partida)
+            await interaction.response.send_message("👇 Escolha abaixo quem ganhou por **W.O**:", view=view, ephemeral=True)
 
-    @discord.ui.button(label="Finalizar partida", style=discord.ButtonStyle.danger, emoji="🔒")
-    async def botao_finalizar(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔒 **A partida foi finalizada. Deletando o tópico em instantes...**", ephemeral=True)
-        if isinstance(interaction.channel, discord.Thread):
-            import asyncio
-            await asyncio.sleep(2)
-            try:
-                await interaction.channel.delete()
-            except Exception:
-                pass
+        elif escolha == "reembolso":
+            valor_base = valores_apostas_partidas.get(self.thread_id, 0.50)
+            valor_str = f"R$ {valor_base:.2f}".replace(".", ",")
+            taxa_centavos_exibicao = int(round(taxa_global_centavos * 100))
+
+            embed_reembolso = discord.Embed(
+                title="💸 Reembolso Solicitado",
+                description=(
+                    f"O valor exato para o reembolso (descontando a taxa de {taxa_centavos_exibicao}c) é:\n\n"
+                    f"🔑 **Valor do Reembolso:** `{valor_str}`"
+                ),
+                color=discord.Color.gold()
+            )
+            await interaction.response.send_message(embed=embed_reembolso, ephemeral=True)
+
+        elif escolha == "finalizar":
+            await interaction.response.send_message("🔒 **A partida foi finalizada. Deletando o tópico em instantes...**", ephemeral=True)
+            if isinstance(interaction.channel, discord.Thread):
+                import asyncio
+                await asyncio.sleep(2)
+                try:
+                    await interaction.channel.delete()
+                except Exception:
+                    pass
+
+class PainelMediadorView(discord.ui.View):
+    def __init__(self, membros_partida, thread_id, mediador_id):
+        super().__init__(timeout=None)
+        self.add_item(PainelMediadorSelect(membros_partida, thread_id, mediador_id))
 
 @bot.tree.command(name="painel_sala", description="Abre o painel de controle da sala")
 async def slash_painel_sala(interaction: discord.Interaction):
@@ -971,7 +981,7 @@ async def slash_painel_sala(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="⚙️ Painel de Controle do Mediador",
-        description="Utilize os botões abaixo para gerenciar a partida:",
+        description="Utilize o menu abaixo para gerenciar a partida:",
         color=discord.Color.blurple()
     )
     embed.set_footer(text="Painel exclusivo para controle do Mediador.")
@@ -1003,7 +1013,7 @@ async def finalizar_sala(ctx):
 
     embed = discord.Embed(
         title="⚙️ Painel de Controle do Mediador",
-        description="Utilize os botões abaixo para gerenciar a partida:",
+        description="Utilize o menu abaixo para gerenciar a partida:",
         color=discord.Color.blurple()
     )
     embed.set_footer(text="Painel exclusivo para controle do Mediador.")
