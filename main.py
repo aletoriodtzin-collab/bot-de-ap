@@ -1,4 +1,5 @@
 import os
+import random
 import discord
 from discord.ext import commands
 
@@ -46,7 +47,8 @@ config_bot_dados = {
     "cargo_config": [],
     "cargo_entrar_med": [],
     "cargo_cadastrar_pix": [],
-    "cargo_comando_p": []
+    "cargo_comando_p": [],
+    "canais_topicos": []  # Guarda os IDs de até 3 canais onde os tópicos podem ser gerados
 }
 
 def verificar_permissao_global(user: discord.Member) -> bool:
@@ -91,7 +93,7 @@ class ConfigBotModal(discord.ui.Modal, title="Configurações do Bot"):
         await interaction.response.send_message("✅ **Configurações do bot atualizadas com sucesso!**", ephemeral=True)
 
 # ------------------------------------------------------------------
-# SELECTS DE CARGOS MÚLTIPLOS
+# SELECTS DE CARGOS MÚLTIPLOS E SELEÇÃO DE CANAIS
 # ------------------------------------------------------------------
 class MultiRoleSelectComandos(discord.ui.RoleSelect):
     def __init__(self):
@@ -149,6 +151,20 @@ class MultiRoleSelectComandoP(discord.ui.RoleSelect):
         config_bot_dados["cargo_comando_p"] = [str(r.id) for r in self.values]
         await interaction.response.send_message(f"✅ Cargos atualizados: {len(self.values)} cargo(s) selecionado(s).", ephemeral=True)
 
+class SelectCanaisTopicos(discord.ui.ChannelSelect):
+    def __init__(self):
+        super().__init__(
+            placeholder="Selecione até 3 canais onde os tópicos podem gerar...",
+            min_values=1,
+            max_values=3,
+            channel_types=[discord.ChannelType.text]
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        config_bot_dados["canais_topicos"] = [str(c.id) for c in self.values]
+        mencoes = [c.mention for c in self.values]
+        await interaction.response.send_message(f"✅ Canais selecionados para criação de tópicos ({len(self.values)}): {', '.join(mencoes)}", ephemeral=True)
+
 class ConfigBotViewPart1(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=180)
@@ -163,6 +179,11 @@ class ConfigBotViewPart2(discord.ui.View):
         self.add_item(MultiRoleSelectEntrarMed())
         self.add_item(MultiRoleSelectCadastrarPix())
         self.add_item(MultiRoleSelectComandoP())
+
+class ConfigBotViewCanais(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.add_item(SelectCanaisTopicos())
 
 class ConfigBotView(discord.ui.View):
     def __init__(self):
@@ -188,6 +209,13 @@ class ConfigBotView(discord.ui.View):
             await interaction.response.send_message("❌ Apenas o dono ou mediadores podem usar este botão!", ephemeral=True)
             return
         await interaction.response.send_message("📌 **Selecione abaixo os cargos para cada permissão (Parte 2):**", view=ConfigBotViewPart2(), ephemeral=True)
+
+    @discord.ui.button(label="Canais dos Tópicos", style=discord.ButtonStyle.success, emoji="💬")
+    async def selecionar_canais_topicos(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not verificar_permissao_global(interaction.user):
+            await interaction.response.send_message("❌ Apenas o dono ou mediadores podem configurar os canais!", ephemeral=True)
+            return
+        await interaction.response.send_message("📌 **Em qual canal o tópico vai gerar? Selecione até 3 canais abaixo:**", view=ConfigBotViewCanais(), ephemeral=True)
 
     @discord.ui.button(label="Resetar total de filas", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def resetar_filas(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -223,6 +251,18 @@ async def slash_config_bot(interaction: discord.Interaction):
                 nomes.append(f"ID: {cid}")
         return ", ".join(nomes)
 
+    def formatar_canais(guild, lista_ids):
+        if not lista_ids:
+            return "Nenhum canal configurado (usará o próprio canal da fila)"
+        mencoes = []
+        for cid in lista_ids:
+            canal = guild.get_channel(int(cid)) if cid.isdigit() else None
+            if canal:
+                mencoes.append(canal.mention)
+            else:
+                mencoes.append(f"ID: {cid}")
+        return ", ".join(mencoes)
+
     guild = interaction.guild
     embed = discord.Embed(
         title="⚙️ Painel de Configurações do Bot",
@@ -230,6 +270,7 @@ async def slash_config_bot(interaction: discord.Interaction):
         color=discord.Color.blurple()
     )
     embed.add_field(name="👤 Dono do Bot (ID)", value=config_bot_dados["dono_id"] or "Não definido", inline=False)
+    embed.add_field(name="💬 Canais para Tópicos (Até 3)", value=formatar_canais(guild, config_bot_dados["canais_topicos"]), inline=False)
     embed.add_field(name="⌨️ Cargo p/ Comandos", value=formatar_cargos(guild, config_bot_dados["cargo_comandos"]), inline=True)
     embed.add_field(name="➔ Cargo p/ Criar Fila", value=formatar_cargos(guild, config_bot_dados["cargo_criar_fila"]), inline=True)
     embed.add_field(name="💳 Cargo p/ Painel Pix", value=formatar_cargos(guild, config_bot_dados["cargo_criar_pix"]), inline=True)
@@ -600,7 +641,7 @@ class FilaView(discord.ui.View):
 
     @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "gelo normal" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "gelo normal"
+        modo_texto = "gelo normal"
         await self.entrar_na_fila(interaction, modo_texto)
 
     @discord.ui.button(label="Arma Infinita", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
@@ -667,9 +708,20 @@ class FilaView(discord.ui.View):
 
             await interaction.response.edit_message(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
             
-            msg_criando = await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
+            await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
 
-            channel = interaction.channel
+            # LÓGICA DE ESCOLHA ALEATÓRIA DO CANAL PARA GERAR O TÓPICO
+            canais_ids = config_bot_dados.get("canais_topicos", [])
+            channel = None
+
+            if canais_ids:
+                canal_id_sorteado = random.choice(canais_ids)
+                channel = interaction.guild.get_channel(int(canal_id_sorteado))
+
+            # Caso não haja nenhum canal sorteado ou o canal não exista, usa o canal onde a fila foi clicada
+            if not channel:
+                channel = interaction.channel
+
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
 
             contador_filas_criadas += 1
@@ -766,7 +818,7 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
                 await canal_selecionado.send(embed=embed, view=view)
                 valor_atual_idx += 1
 
-            await interaction.followup.send(f"✅ As **15 filas** em ordem decrescente foram criadas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
+            await interaction.followup.send(f"✅As **15 filas** em ordem decrescente foram criadas com sucesso no canal {canal_selecionado.mention}!", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Ocorreu um erro ao enviar as filas: {e}", ephemeral=True)
 
