@@ -769,7 +769,7 @@ class FilaView(discord.ui.View):
             self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Arma Infinita"
+            self.gelo_infinito.label = "Gelo Infinita"
             self.gelo_normal.label = "Gelo Normal"
             self.gelo_normal.emoji = EMOJI_GELO
 
