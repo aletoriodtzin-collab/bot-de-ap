@@ -820,6 +820,11 @@ class FilaView(discord.ui.View):
             j2_obj, mode2 = fila_jogadores[1]
 
             if mode1 != mode2:
+                if mode1 != mode2:
+    embed_atualizado = criar_embed_fila(nome_fila=self.nome...)
+    await interaction.response.edit_message(embed=embed_atualizado)
+    return
+    
                 return
 
             if not fila_mediadores:
