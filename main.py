@@ -398,7 +398,7 @@ async def slash_pix(interaction: discord.Interaction):
 def criar_embed_mediadores():
     embed = discord.Embed(
         title="🛡️ Fila de Mediadores",
-        description="Você tem que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
+        description="Você tiene que entrar na fila para começar a mediar, caso contrário nenhuma partida será iniciada!",
         color=discord.Color.blue()
     )
     
@@ -589,19 +589,23 @@ class FilaView(discord.ui.View):
 
         if self.modo_jogo in ["2v2", "3v3", "4v4"]:
             self.gelo_infinito.emoji = EMOJI_CONTROLE
-            self.gelo_infinito.label = "Arma Infinita"
+            self.gelo_infinito.label = "Full Ump"
+            self.gelo_normal.label = "Xm8 e Ump"
+            self.gelo_normal.emoji = EMOJI_CONTROLE
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Gelo Infinito"
+            self.gelo_infinito.label = "Arma Infinita"
+            self.gelo_normal.label = "Gelo Normal"
+            self.gelo_normal.emoji = EMOJI_GELO
 
     @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "gelo normal"
+        modo_texto = "xm8 e ump" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "gelo normal"
         await self.entrar_na_fila(interaction, modo_texto)
 
-    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
+    @discord.ui.button(label="Arma Infinita", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "arma infinita" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "gelo infinito"
+        modo_texto = "full ump" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "arma infinita"
         await self.entrar_na_fila(interaction, modo_texto)
 
     @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
@@ -667,7 +671,9 @@ class FilaView(discord.ui.View):
             fila_jogadores.clear()
 
             await interaction.response.edit_message(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
-            await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
+            
+            # Envia a mensagem avisando que está criando e apaga em seguida (ou envia de forma efêmera/temporária)
+            msg_criando = await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
 
             channel = interaction.channel
             j1, j2 = jogadores_partida[0], jogadores_partida[1]
@@ -760,7 +766,6 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 val_str = f"{val_num:.2f}".replace(".", ",")
                 
-                # CORREÇÃO AQUI: Passando valor_aposta em vez de valor_str
                 embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
                 view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=val_str, valor_num=val_num)
                 
