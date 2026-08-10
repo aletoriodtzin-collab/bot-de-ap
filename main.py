@@ -19,6 +19,9 @@ EMOJI_UMP      = "<:emoji_5:1536177589310197810>"
 # LINK DO GIF/IMAGEM QUE FICARÁ NA THUMBNAIL (CANTO SUPERIOR DIREITO)
 LINK_GIF_THUMBNAIL = "https://www.image2url.com/r2/default/gifs/1786339404757-45ccc5d8-1394-4391-a211-bbb2efea8930.gif"
 
+# LINK DO BANNER QUE FICARÁ ACIMA DO TÍTULO DA FILA
+LINK_BANNER_FILA = "https://cdn.discordapp.com/attachments/1536248865689440257/1536252370923687966/file_000000007968820eb5f30b80ea7a23f2.png?ex=6a7aba03&is=6a796883&hm=c022e2edccce5bd166703d948a6bbc7b2ed79d4444383b8ea4405345353f74f9&"
+
 # Armazena os dados da fila
 fila_jogadores = []
 fila_mediadores = []
@@ -540,6 +543,11 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
         title=f"➔ {modo_jogo} — {nome_fila}",
         color=discord.Color.green()
     )
+    
+    # Aplica o Banner no topo do embed se configurado
+    if LINK_BANNER_FILA:
+        embed.set_image(url=LINK_BANNER_FILA)
+
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value=modo_jogo, inline=False)
     embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value=valor_aposta, inline=False)
 
@@ -610,7 +618,8 @@ class ConfirmarPartidaView(discord.ui.View):
                 try:
                     async for msg in interaction.channel.history(limit=50):
                         try:
-                            await msg.delete()
+                            if not msg.is_system():
+                                await msg.delete()
                         except Exception:
                             pass
                 except Exception as e:
@@ -644,7 +653,11 @@ class ConfirmarPartidaView(discord.ui.View):
                     await interaction.followup.send(content=f"🔔 {self.jogadores[0].mention} {self.jogadores[1].mention}", embed=embed_pix)
 
                 if isinstance(interaction.channel, discord.Thread):
-                    await interaction.channel.send(f"🔑 **Pix Copia e Cola / Chave:**\n```\n{dados_pix['chave']}\n```\n*Envie o comprovante e digite **'pago'** aqui no chat assim que realizar o pagamento!*")
+                    await interaction.channel.send(
+                        f"🔑 **Pix Copia e Cola / Chave:**\n```\n{dados_pix['chave']}\n```\n"
+                        f"### 💸 Valor a pagar: {self.valor_com_taxa_str}\n\n"
+                        f"*Envie o comprovante e digite **'pago'** aqui no chat assim que realizar o pagamento!*"
+                    )
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.danger, emoji="✖️")
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -684,7 +697,7 @@ class FilaView(discord.ui.View):
             self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Arma Infinita"
+            self.gelo_infinito.label = "Gelo infinito"
             self.gelo_normal.label = "Gelo Normal"
             self.gelo_normal.emoji = EMOJI_GELO
 
@@ -1196,10 +1209,8 @@ async def on_message(message):
     if message.is_system():
         try:
             await message.delete()
-        except discord.Forbidden:
-            print("⚠️ O bot não possui permissão 'Gerenciar Mensagens' para apagar os avisos do sistema!")
-        except Exception as e:
-            print(f"⚠️ Erro ao apagar mensagem do sistema: {e}")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
         return
 
     if message.author.bot:
@@ -1251,4 +1262,4 @@ TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
-    bot.run(TOKEN) 
+    bot.run(TOKEN)
