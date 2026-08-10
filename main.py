@@ -820,10 +820,12 @@ class FilaView(discord.ui.View):
             j2_obj, mode2 = fila_jogadores[1]
 
             if mode1 != mode2:
-    embed_atualizado = criar_embed_fila(nome_fila=self.nome...)
-    await interaction.response.edit_message(embed=embed_atualizado)
-    return
-    
+                embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
+                await interaction.response.edit_message(embed=embed_atualizado, view=self)
+                await interaction.followup.send(
+                    f"❌ **Escolhas diferentes!** O tópico não será criado pois {j1_obj.mention} e {j2_obj.mention} escolheram modos diferentes.", 
+                    ephemeral=True
+                )
                 return
 
             if not fila_mediadores:
