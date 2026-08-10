@@ -10,9 +10,9 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # EMOJIS PERSONALIZADOS
-EMOJI_CONTROLE = "<:emoji_2:1536266975079174174>"
+EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
-EMOJI_BONECO   = "<:emoji_4:1536274034243936266>"
+EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
 EMOJI_UMP      = "<:emoji_5:1536177589310197810>"
 
@@ -403,7 +403,7 @@ class FormularioPixModal(discord.ui.Modal, title="Cadastrar Pix"):
 
     nome_conta = discord.ui.TextInput(
         label="Nome no app do banco",
-        placeholder="Ex: Luan Bruno",
+        placeholder="Ex: jacinto",
         style=discord.TextStyle.short,
         required=True
     )
@@ -697,7 +697,7 @@ class FilaView(discord.ui.View):
             self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Gelo infinito"
+            self.gelo_infinito.label = "Arma Infinita"
             self.gelo_normal.label = "Gelo Normal"
             self.gelo_normal.emoji = EMOJI_GELO
 
@@ -1263,3 +1263,5 @@ if not TOKEN:
     print("❌ ERRO: A variável 'TOKEN' não existe no Railway!")
 else:
     bot.run(TOKEN)
+
+      
