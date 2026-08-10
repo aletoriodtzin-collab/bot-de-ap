@@ -8,7 +8,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Armazena os dados da fila (agora armazena a tupla separada por item ou estrutura própria)
+# Armazena os dados da fila
 fila_jogadores = []
 fila_mediadores = []
 TAMANHO_MAXIMO = 2 
@@ -472,7 +472,7 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        # Exibe seguindo estritamente o formato solicitado: • @user | escolha
+        # Exibe seguindo estritamente o formato solicitado: • @user | escolha (quem chegou primeiro fica acima do segundo)
         linhas = [f"• {j.mention} | {gelo}" for j, gelo in fila_jogadores]
         texto_jogadores = "\n".join(linhas)
 
@@ -635,7 +635,7 @@ class FilaView(discord.ui.View):
             await interaction.response.send_message("❌ A fila já está cheia!", ephemeral=True)
             return
 
-        # Adiciona o jogador respeitando a ordem de chegada (o primeiro fica sempre acima do segundo)
+        # Adiciona o jogador respeitando a ordem de chegada (quem chegou primeiro fica acima do segundo)
         fila_jogadores.append((user, modo_gelo))
 
         # Se atingiu o limite máximo (2 jogadores), verificamos as escolhas
@@ -643,13 +643,13 @@ class FilaView(discord.ui.View):
             j1_obj, mode1 = fila_jogadores[0]
             j2_obj, mode2 = fila_jogadores[1]
 
-            # Se os modos escolhidos forem DIFERENTES, não cria o tópico e avisa
+            # Se os modos escolhidos forem DIFERENTES, não cria o tópico, atualiza a embed e avisa
             if mode1 != mode2:
                 embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
                 await interaction.response.edit_message(embed=embed_atualizado, view=self)
                 await interaction.followup.send(
-                    f"❌ **Escolhas diferentes!** {j1_obj.mention} escolheu `{mode1}` e {j2_obj.mention} escolheu `{mode2}`. "
-                    f"Para criar a partida, ambos devem escolher o mesmo modo!", ephemeral=True
+                    f"❌ **Escolhas diferentes!** O tópico não será criado pois {j1_obj.mention} e {j2_obj.mention} escolheram modos diferentes.", 
+                    ephemeral=True
                 )
                 return
 
@@ -760,7 +760,9 @@ class CanalUnicoSelect(discord.ui.ChannelSelect):
                 val_num = self.parent_view.valores_nums[valor_atual_idx % len(self.parent_view.valores_nums)]
                 val_str = f"{val_num:.2f}".replace(".", ",")
                 
-                embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=val_str, valor_num=val_num)
+                # CORREÇÃO AQUI: Passando valor_aposta em vez de valor_str
+                embed = criar_embed_fila(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_aposta=f"R$ {val_str}")
+                view = FilaView(nome_fila=self.parent_view.nome_fila, modo_jogo=self.parent_view.modo, valor_str=val_str, valor_num=val_num)
                 
                 await canal_selecionado.send(embed=embed, view=view)
                 valor_atual_idx += 1
