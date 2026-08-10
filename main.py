@@ -788,7 +788,7 @@ class FilaView(discord.ui.View):
         modo_texto = "gelo normal"
         await self.entrar_na_fila(interaction, modo_texto)
 
-    @discord.ui.button(label="Arma Infinita", style=discord.ButtonStyle.secondary, emoji=EMOJI_GELO)
+    @discord.ui.button(label="Gelo Infinita", style=discord.ButtonStyle.secondary, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
         modo_texto = "full ump xm8" if any(mod in self.modo_jogo for mod in ["2v2", "3v3", "4v4"]) else "arma infinita"
         await self.entrar_na_fila(interaction, modo_texto)
