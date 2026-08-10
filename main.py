@@ -635,7 +635,7 @@ class FilaView(discord.ui.View):
             self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Arma Infinita"
+            self.gelo_infinito.label = "gelo Infinita"
             self.gelo_normal.label = "Gelo Normal"
             self.gelo_normal.emoji = EMOJI_GELO
 
@@ -1141,10 +1141,20 @@ async def slash_finalizar_sala(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, view=view, ephemeral=False)
 
 # ------------------------------------------------------------------
-# EVENTO ON_MESSAGE: DETECTAR QUANDO OS JOGADORES DIZEM "PAGO"
+# EVENTO ON_MESSAGE: APAGAR MENSAGENS DO SISTEMA E DETECTAR "PAGO"
 # ------------------------------------------------------------------
 @bot.event
 async def on_message(message):
+    # Deleta automaticamente mensagens geradas pelo sistema do Discord (ex: alteração do tópico)
+    if message.is_system():
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            print("⚠️ O bot não possui permissão 'Gerenciar Mensagens' para apagar os avisos do sistema!")
+        except Exception as e:
+            print(f"⚠️ Erro ao apagar mensagem do sistema: {e}")
+        return
+
     if message.author.bot:
         return
 
