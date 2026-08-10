@@ -287,6 +287,7 @@ EMOJI_CONTROLE = "<:emoji_1:1535450507160846506>"
 EMOJI_DINHEIRO = "<:emoji_2:1535453860947034193>"
 EMOJI_BONECO   = "<:emoji_3:1535462271906746408>"
 EMOJI_GELO     = "<:emoji_4:1535465191481810954>"
+EMOJI_UMP      = "<:emoji_5:1536177589310197810>"
 
 # ------------------------------------------------------------------
 # COMANDO DE PREFIXO: .p (ESTATÍSTICAS)
@@ -472,7 +473,6 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 Mobile", valor_a
     if not fila_jogadores:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        # Exibe seguindo estritamente o formato solicitado: • @user | escolha (quem chegou primeiro fica acima do segundo)
         linhas = [f"• {j.mention} | {gelo}" for j, gelo in fila_jogadores]
         texto_jogadores = "\n".join(linhas)
 
@@ -588,10 +588,10 @@ class FilaView(discord.ui.View):
         self.valor_num = valor_num
 
         if self.modo_jogo in ["2v2", "3v3", "4v4"]:
-            self.gelo_infinito.emoji = EMOJI_CONTROLE
-            self.gelo_infinito.label = "Full Ump"
-            self.gelo_normal.label = "Xm8 e Ump"
-            self.gelo_normal.emoji = EMOJI_CONTROLE
+            self.gelo_infinito.emoji = EMOJI_UMP
+            self.gelo_infinito.label = "Full ump xm8"
+            self.gelo_normal.label = "Gelo normal"
+            self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
             self.gelo_infinito.label = "Arma Infinita"
@@ -600,12 +600,12 @@ class FilaView(discord.ui.View):
 
     @discord.ui.button(label="Gelo Normal", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_normal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "xm8 e ump" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "gelo normal"
+        modo_texto = "gelo normal" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "gelo normal"
         await self.entrar_na_fila(interaction, modo_texto)
 
     @discord.ui.button(label="Arma Infinita", style=discord.ButtonStyle.success, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "full ump" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "arma infinita"
+        modo_texto = "full ump xm8" if self.modo_jogo in ["2v2", "3v3", "4v4"] else "arma infinita"
         await self.entrar_na_fila(interaction, modo_texto)
 
     @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
@@ -629,7 +629,6 @@ class FilaView(discord.ui.View):
         global contador_filas_criadas
         user = interaction.user
 
-        # Remove se o usuário já estiver na fila para atualizar ou tratar
         for item in fila_jogadores:
             if item[0].id == user.id:
                 await interaction.response.send_message("⚠️ Você já está na fila!", ephemeral=True)
@@ -639,15 +638,12 @@ class FilaView(discord.ui.View):
             await interaction.response.send_message("❌ A fila já está cheia!", ephemeral=True)
             return
 
-        # Adiciona o jogador respeitando a ordem de chegada (quem chegou primeiro fica acima do segundo)
         fila_jogadores.append((user, modo_gelo))
 
-        # Se atingiu o limite máximo (2 jogadores), verificamos as escolhas
         if len(fila_jogadores) == TAMANHO_MAXIMO:
             j1_obj, mode1 = fila_jogadores[0]
             j2_obj, mode2 = fila_jogadores[1]
 
-            # Se os modos escolhidos forem DIFERENTES, não cria o tópico, atualiza a embed e avisa
             if mode1 != mode2:
                 embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
                 await interaction.response.edit_message(embed=embed_atualizado, view=self)
@@ -657,10 +653,9 @@ class FilaView(discord.ui.View):
                 )
                 return
 
-            # Se chegou aqui, as escolhas são IDÊNTICAS! Prosseguimos com a criação do tópico.
             if not fila_mediadores:
                 await interaction.response.send_message("❌ Não há mediadores na fila! Aguarde um mediador entrar.", ephemeral=True)
-                fila_jogadores.pop() # Remove o último que entrou para liberar a vaga
+                fila_jogadores.pop()
                 return
 
             mediador = fila_mediadores.pop(0)
@@ -672,7 +667,6 @@ class FilaView(discord.ui.View):
 
             await interaction.response.edit_message(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
             
-            # Envia a mensagem avisando que está criando e apaga em seguida (ou envia de forma efêmera/temporária)
             msg_criando = await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
 
             channel = interaction.channel
