@@ -779,7 +779,7 @@ class FilaView(discord.ui.View):
             self.gelo_normal.emoji = EMOJI_GELO
         else:
             self.gelo_infinito.emoji = EMOJI_GELO
-            self.gelo_infinito.label = "Gelo Infinita"
+            self.gelo_infinito.label = "Gelo Infinito"
             self.gelo_normal.label = "Gelo Normal"
             self.gelo_normal.emoji = EMOJI_GELO
 
@@ -788,13 +788,13 @@ class FilaView(discord.ui.View):
         modo_texto = "gelo normal"
         await self.entrar_na_fila(interaction, modo_texto)
 
-    @discord.ui.button(label="Gelo Infinita", style=discord.ButtonStyle.secondary, emoji=EMOJI_GELO)
+    @discord.ui.button(label="Gelo Infinito", style=discord.ButtonStyle.secondary, emoji=EMOJI_GELO)
     async def gelo_infinito(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modo_texto = "full ump xm8" if any(mod in self.modo_jogo for mod in ["2v2", "3v3", "4v4"]) else "Gelo infinita"
+        modo_texto = "full ump xm8" if any(mod in self.modo_jogo for mod in ["2v2", "3v3", "4v4"]) else "Gelo infinito"
         await self.entrar_na_fila(interaction, modo_texto)
 
     @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
-    async def sair_fila(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def sair_da_fiila(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user = interaction.user
         encontrado = None
@@ -810,7 +810,7 @@ class FilaView(discord.ui.View):
                 await interaction.message.edit(embed=embed_atualizado, view=self)
             except Exception:
                 pass
-            await interaction.followup.send(f"🚪 {user.mention} saiu da fila.", ephemeral=True)
+            await interaction.followup.send(f"👋 {user.mention} saiu da fila.", ephemeral=True)
         else:
             await interaction.followup.send("❌ Você não está na fila!", ephemeral=True)
 
