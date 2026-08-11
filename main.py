@@ -793,7 +793,7 @@ class FilaView(discord.ui.View):
         modo_texto = "full ump xm8" if any(mod in self.modo_jogo for mod in ["2v2", "3v3", "4v4"]) else "Gelo infinito"
         await self.entrar_na_fila(interaction, modo_texto)
 
-    @discord.ui.button(label="Sair Fila", style=discord.ButtonStyle.danger, emoji="❌")
+    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="❌")
     async def sair_da_fiila(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user = interaction.user
@@ -859,7 +859,7 @@ class FilaView(discord.ui.View):
             except Exception:
                 pass
             
-            await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida com o mediador {mediador.mention}...", ephemeral=True)
+            await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida privada com o mediador {mediador.mention}...", ephemeral=True)
 
             canais_ids = config_bot_dados.get("canais_topicos", [])
             channel = None
@@ -876,10 +876,11 @@ class FilaView(discord.ui.View):
             contador_filas_criadas += 1
             nome_topico_fila = f"Fila-{contador_filas_criadas}"
 
+            # TÓPICO PRIVADO COM FALLBACK
             try:
                 topico = await channel.create_thread(
                     name=nome_topico_fila,
-                    type=discord.ChannelType.public_thread,
+                    type=discord.ChannelType.private_thread,
                     auto_archive_duration=60
                 )
             except Exception:
@@ -891,10 +892,6 @@ class FilaView(discord.ui.View):
             valores_apostas_partidas[topico.id] = self.valor_num
             mediadores_partidas[topico.id] = mediador
             jogadores_partidas[topico.id] = [j1.id, j2.id]
-
-            await topico.add_user(j1)
-            await topico.add_user(j2)
-            await topico.add_user(mediador)
 
             valor_com_taxa_num = self.valor_num + taxa_global_centavos
             valor_com_taxa_str = f"R$ {valor_com_taxa_num:.2f}".replace(".", ",")
@@ -912,6 +909,7 @@ class FilaView(discord.ui.View):
 
             view_confirmacao = ConfirmarPartidaView(jogadores_partida, mediador, valor_com_taxa_str, valor_base_str, estilo_jogo_str)
 
+            # ENTRADA SILENCIOSA: Menção na primeira mensagem adiciona ao tópico privado sem criar log do sistema
             await topico.send(
                 content=f"🔔 {j1.mention} {j2.mention} | Mediador: {mediador.mention}",
                 embed=embed_partida,
@@ -1312,6 +1310,7 @@ async def comando_finalizar_sala(ctx):
 # ------------------------------------------------------------------
 @bot.event
 async def on_message(message):
+    # Apaga automaticamente mensagens geradas pelo próprio sistema do Discord
     if message.is_system():
         try:
             await message.delete()
@@ -1327,6 +1326,7 @@ async def on_message(message):
     if isinstance(message.channel, discord.Thread):
         thread_id = message.channel.id
 
+        # Verifica se alguém/suporte foi mencionado
         if message.mentions:
             cargo_autorizado_mencionado = False
             
@@ -1358,6 +1358,7 @@ async def on_message(message):
 
                     await message.channel.send(embed=embed_info)
 
+        # Trata o gatilho "pago"
         if thread_id in jogadores_partidas and thread_id in mediadores_partidas:
             conteudo = message.content.lower().strip()
             if "pago" in conteudo or "paguei" in conteudo:
@@ -1387,7 +1388,6 @@ async def on_message(message):
 
 @bot.event
 async def on_ready():
-    # Registra views persistentes para que funcionem para sempre, mesmo após reinicializações
     bot.add_view(ConfigBotView())
     bot.add_view(PixView())
     bot.add_view(MedView())
