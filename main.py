@@ -1072,14 +1072,19 @@ class ViewSelecaoModoFila(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(SelectModoFila())
 
-@bot.tree.command(name="criar_15_filas", description="Gera 15 filas escolhendo o modo e plataforma desejados")
+@bot.tree.command(name="criar_15_filas", description="Cria as filas de partida")
 async def slash_criar_15_filas(interaction: discord.Interaction):
     if not verificar_permissao_global(interaction.user):
         await sem_permissao_resposta(interaction)
         return
 
     view_modo = ViewSelecaoModoFila()
-    await interaction.response.send_message("🎮 **Passo 1:** Escolha abaixo o modo de jogo e plataforma desejados:", view=view_modo, ephemeral=True)
+    await interaction.response.send_message(
+    content="🎮 **Passo 1:** Escolha abaixo o modo de jogo e plataforma desejados:",
+    view=view_modo,
+    ephemeral=True
+    )
+    
 
 # ------------------------------------------------------------------
 # PAINEL DE CONTROLE DA SALA DO MEDIADOR
