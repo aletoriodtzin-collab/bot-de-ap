@@ -26,7 +26,6 @@ LINK_BANNER_FILA = "https://cdn.discordapp.com/attachments/1536248865689440257/1
 # Armazena os dados da fila
 fila_jogadores = []
 fila_mediadores = []
-TAMANHO_MAXIMO = 2 
 
 # Dicionários de armazenamento
 pix_mediadores = {}
@@ -408,7 +407,7 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
         label="Valor da taxa (em centavos ou reais)",
         placeholder="Ex: 10 (para 10 centavos) ou 0,10",
         style=discord.TextStyle.short,
-        required=True
+        rerequired=True
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -824,42 +823,38 @@ class FilaView(discord.ui.View):
                 await interaction.followup.send("⚠️ Você já está na fila!", ephemeral=True)
                 return
 
-        if len(fila_jogadores) >= TAMANHO_MAXIMO:
-            await interaction.followup.send("❌ A fila já está cheia!", ephemeral=True)
-            return
+        # Busca na fila se já existe um jogador que escolheu O MESMO MODO/GELO
+        match_jogador = None
+        for item in fila_jogadores:
+            if item[1].lower() == modo_gelo.lower():
+                match_jogador = item
+                break
 
-        fila_jogadores.append((user, modo_gelo))
-
-        if len(fila_jogadores) == TAMANHO_MAXIMO:
-            j1_obj, mode1 = fila_jogadores[0]
-            j2_obj, mode2 = fila_jogadores[1]
-
-            if mode1 != mode2:
-                embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
-                try:
-                    await interaction.message.edit(embed=embed_atualizado, view=self)
-                except Exception:
-                    pass
-                return
-
+        if match_jogador:
+            # Caso tenha alguém no mesmo modo, verifica se há mediadores
             if not fila_mediadores:
                 await interaction.followup.send("❌ Não há mediadores na fila! Aguarde um mediador entrar.", ephemeral=True)
-                fila_jogadores.pop()
                 return
+
+            # Remove o jogador com quem deu "match"
+            fila_jogadores.remove(match_jogador)
+            j1_obj, mode1 = match_jogador
+            j2_obj, mode2 = user, modo_gelo
 
             mediador = fila_mediadores.pop(0)
             fila_mediadores.append(mediador)
             await atualizar_painel_mediadores()
 
             jogadores_partida = [j1_obj, j2_obj]
-            fila_jogadores.clear()
 
+            # Atualiza a mensagem da fila original exibindo quem restar na lista
+            embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
             try:
-                await interaction.message.edit(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
+                await interaction.message.edit(embed=embed_atualizado, view=self)
             except Exception:
                 pass
             
-            await interaction.followup.send(f"✅ Fila lotada com o mesmo modo! Criando partida privada com o mediador {mediador.mention}...", ephemeral=True)
+            await interaction.followup.send(f"✅ Fila lotada no modo **{modo_gelo}**! Criando partida privada com o mediador {mediador.mention}...", ephemeral=True)
 
             canais_ids = config_bot_dados.get("canais_topicos", [])
             channel = None
@@ -916,6 +911,8 @@ class FilaView(discord.ui.View):
                 view=view_confirmacao
             )
         else:
+            # Caso não encontre alguém no mesmo modo, adiciona o jogador à fila de espera no painel
+            fila_jogadores.append((user, modo_gelo))
             embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
             try:
                 await interaction.message.edit(embed=embed_atualizado, view=self)
