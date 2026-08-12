@@ -797,26 +797,41 @@ class FilaView(discord.ui.View):
         modo_texto = "full ump xm8" if any(mod in self.modo_jogo for mod in ["2v2", "3v3", "4v4"]) else "Gelo infinito"
         await self.entrar_na_fila(interaction, modo_texto)
 
-    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger, emoji="❌")
+    @discord.ui.button(label="Sair da Fila", style=discord.ButtonStyle.danger)
     async def sair_da_fiila(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         user = interaction.user
         encontrado = None
+
+        # Procura se o jogador esta cadastrado na lista de filas
         for item in fila_jogadores:
             if item[0].id == user.id:
                 encontrado = item
                 break
 
         if encontrado:
+            # Pega o nome da fila onde o jogador realmente esta registrado
+            nome_fila_usuario = encontrado[1] if len(encontrado) > 1 else "outra fila"
+            
+            # Se a fila atual do painel for diferente da fila do usuario:
+            if hasattr(self, 'nome_fila') and self.nome_fila != nome_fila_usuario:
+                await interaction.followup.send(
+                    f"❌ **Você não está nessa fila, você está na fila {nome_fila_usuario}!**",
+                    ephemeral=True
+                )
+                return
+
+            # Se estiver na fila certa, remove ele
             fila_jogadores.remove(encontrado)
-            embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
+            embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila)
             try:
-                await interaction.message.edit(embed=embed_atualizado, view=self)
+                await interaction.message.edit(embed=embed_atualizado)
             except Exception:
                 pass
-            await interaction.followup.send(f"👋 {user.mention} saiu da fila.", ephemeral=True)
+            await interaction.followup.send(f"👋 {user.mention} saiu da fila!", ephemeral=True)
         else:
-            await interaction.followup.send("❌ Você não está na fila!", ephemeral=True)
+            await interaction.followup.send("❌ Você não está em nenhuma fila!", ephemeral=True)
+            
 
     async def entrar_na_fila(self, interaction: discord.Interaction, modo_gelo: str):
         await interaction.response.defer(ephemeral=True)
