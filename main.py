@@ -1052,11 +1052,11 @@ class SelectModoFila(discord.ui.Select):
             discord.SelectOption(label="2v2 - misto", value="2v2 - misto"),
             discord.SelectOption(label="3v3 - misto", value="3v3 - misto"),
             discord.SelectOption(label="4v4 - misto", value="4v4 - misto"),
-            discord.SelectOption(label="1v1 - bate soco", value="1v1 - bate soco"),
-            discord.SelectOption(label="2v2 - bate soco", value="2v2 - bate soco"),
-            discord.SelectOption(label="2v2 - bate soco", value="2v2 - bate soco"),
-            discord.SelectOption(label="3v3 - bate soco", value="3v3 - bate soco"),
-            discord.SelectOption(label="4v4 - bate soco", value="4v4 - bate soco"),
+            discord.SelectOption(label="1v1 - bate soco", value="1v1_bate_soco"),
+            discord.SelectOption(label="2v2 - bate soco", value="2v2_bate_soco"),
+            discord.SelectOption(label="3v3 - bate soco", value="3v3_bate_soco"),
+            discord.SelectOption(label="4v4 - bate soco", value="4v4_bate_soco"),
+            
         ]
         super().__init__(placeholder="Escolha o modo e estilo de jogo...", options=options, min_values=1, max_values=1)
 
