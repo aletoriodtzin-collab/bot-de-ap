@@ -810,16 +810,17 @@ class FilaView(discord.ui.View):
                 break
 
         if encontrado:
-            # Pega o nome da fila onde o jogador realmente esta registrado
-            nome_fila_usuario = encontrado[1] if len(encontrado) > 1 else "outra fila"
+             # item[2] guarda o modo de jogo (ex: 1v1 - mobile)
+            modo_jogo_usuario = encontrado[2] if len(encontrado) > 2 else "outra fila"
             
-            # Se a fila atual do painel for diferente da fila do usuario:
-            if hasattr(self, 'nome_fila') and self.nome_fila != nome_fila_usuario:
+            # Se a fila do painel atual for diferente da fila do usuario:
+            if hasattr(self, 'modo_jogo') and self.modo_jogo != modo_jogo_usuario:
                 await interaction.followup.send(
-                    f"❌ **Você não está nessa fila, você está na fila {nome_fila_usuario}!**",
+                    f"❌ **Você não está nessa fila, você está na fila {modo_jogo_usuario}!**",
                     ephemeral=True
                 )
                 return
+                
 
             # Se estiver na fila certa, remove ele
             fila_jogadores.remove(encontrado)
