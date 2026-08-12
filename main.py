@@ -1074,20 +1074,24 @@ class ViewSelecaoModoFila(discord.ui.View):
 
 @bot.tree.command(name="criar_15_filas", description="Cria as filas de partida")
 async def slash_criar_15_filas(interaction: discord.Interaction):
-    # Avisa o Discord IMEDIATAMENTE (evita o erro vermelho)
-    await interaction.response.defer(ephemeral=True)
-
+    # 1. Checa permissão antes
     if not verificar_permissao_global(interaction.user):
-        await sem_permissao_resposta(interaction)
+        await interaction.response.send_message("❌ Você não tem permissão para usar este comando.", ephemeral=True)
         return
 
-    view_modo = ViewSelecaoModoFila()
-    await interaction.followup.send(
-        content="🎮 **Passo 1:** Escolha abaixo o modo de jogo e plataforma desejados:",
-        view=view_modo,
-        ephemeral=True
-    )
-    
+    # 2. Se tiver permissão, dá o defer
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        view_modo = ViewSelecaoModoFila()
+        await interaction.followup.send(
+            content="🎮 **Passo 1:** Escolha abaixo o modo de jogo e plataforma desejados:",
+            view=view_modo,
+            ephemeral=True
+        )
+    except Exception as e:
+        await interaction.followup.send(content=f"⚠️ Erro ao criar filas: {e}", ephemeral=True)
+        
 # ------------------------------------------------------------------
 # PAINEL DE CONTROLE DA SALA DO MEDIADOR
 # ------------------------------------------------------------------
