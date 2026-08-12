@@ -24,8 +24,10 @@ LINK_GIF_THUMBNAIL = "https://www.image2url.com/r2/default/gifs/1786339404757-45
 LINK_BANNER_FILA = "https://cdn.discordapp.com/attachments/1536248865689440257/1536252370923687966/file_000000007968820eb5f30b80ea7a23f2.png?ex=6a7aba03&is=6a796883&hm=c022e2edccce5bd166703d948a6bbc7b2ed79d4444383b8ea4405345353f74f9&"
 
 # Armazena os dados da fila
+# Cada item armazenado será: (usuario, modo_gelo, modo_jogo, valor_num)
 fila_jogadores = []
 fila_mediadores = []
+TAMANHO_MAXIMO = 2 
 
 # Dicionários de armazenamento
 pix_mediadores = {}
@@ -407,7 +409,7 @@ class ModalConfiguraTaxa(discord.ui.Modal, title="Configurar Taxa"):
         label="Valor da taxa (em centavos ou reais)",
         placeholder="Ex: 10 (para 10 centavos) ou 0,10",
         style=discord.TextStyle.short,
-        rerequired=True
+        required=True
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -638,10 +640,13 @@ def criar_embed_fila(nome_fila="Fila de Aposta", modo_jogo="1v1 - mobile", valor
     embed.add_field(name=f"{EMOJI_CONTROLE} Modo", value=modo_jogo, inline=False)
     embed.add_field(name=f"{EMOJI_DINHEIRO} Valor", value=valor_aposta, inline=False)
 
-    if not fila_jogadores:
+    # Exibe apenas os jogadores que estão na fila DESTA MENSAGEM / PAINEL
+    jogadores_desta_painel = [item for item in fila_jogadores if item[2] == modo_jogo and f"R$ {item[3]:.2f}".replace(".", ",") == valor_aposta]
+
+    if not jogadores_desta_painel:
         texto_jogadores = "*Aguardando jogador...*"
     else:
-        linhas = [f"• {j.mention} | {gelo}" for j, gelo in fila_jogadores]
+        linhas = [f"• {j.mention} | {gelo}" for j, gelo, _, _ in jogadores_desta_painel]
         texto_jogadores = "\n".join(linhas)
 
     embed.add_field(name=f"{EMOJI_BONECO} Jogadores", value=texto_jogadores, inline=False)
@@ -823,38 +828,40 @@ class FilaView(discord.ui.View):
                 await interaction.followup.send("⚠️ Você já está na fila!", ephemeral=True)
                 return
 
-        # Busca na fila se já existe um jogador que escolheu O MESMO MODO/GELO
-        match_jogador = None
-        for item in fila_jogadores:
-            if item[1].lower() == modo_gelo.lower():
-                match_jogador = item
-                break
+        # Adiciona o jogador à fila global com os identificadores do painel (Gelo, Modo, Valor)
+        novo_item = (user, modo_gelo, self.modo_jogo, self.valor_num)
+        fila_jogadores.append(novo_item)
 
-        if match_jogador:
-            # Caso tenha alguém no mesmo modo, verifica se há mediadores
+        # Procura por outro jogador que coincida exatamente nos três filtros: Modo de Gelo, Modo de Jogo e Valor
+        oponentes_compativeis = [
+            item for item in fila_jogadores 
+            if item[1] == modo_gelo and item[2] == self.modo_jogo and item[3] == self.valor_num and item[0].id != user.id
+        ]
+
+        if oponentes_compativeis:
+            oponente = oponentes_compativeis[0]
+
             if not fila_mediadores:
                 await interaction.followup.send("❌ Não há mediadores na fila! Aguarde um mediador entrar.", ephemeral=True)
+                fila_jogadores.remove(novo_item)
                 return
 
-            # Remove o jogador com quem deu "match"
-            fila_jogadores.remove(match_jogador)
-            j1_obj, mode1 = match_jogador
-            j2_obj, mode2 = user, modo_gelo
+            # Remove a dupla formada da fila global
+            fila_jogadores.remove(novo_item)
+            fila_jogadores.remove(oponente)
 
             mediador = fila_mediadores.pop(0)
             fila_mediadores.append(mediador)
             await atualizar_painel_mediadores()
 
-            jogadores_partida = [j1_obj, j2_obj]
+            jogadores_partida = [novo_item[0], oponente[0]]
 
-            # Atualiza a mensagem da fila original exibindo quem restar na lista
-            embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
             try:
-                await interaction.message.edit(embed=embed_atualizado, view=self)
+                await interaction.message.edit(embed=criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}"), view=self)
             except Exception:
                 pass
             
-            await interaction.followup.send(f"✅ Fila lotada no modo **{modo_gelo}**! Criando partida privada com o mediador {mediador.mention}...", ephemeral=True)
+            await interaction.followup.send(f"✅ Match encontrado com o mesmo modo de gelo, modo e valor! Criando partida privada com o mediador {mediador.mention}...", ephemeral=True)
 
             canais_ids = config_bot_dados.get("canais_topicos", [])
             channel = None
@@ -891,7 +898,7 @@ class FilaView(discord.ui.View):
             valor_com_taxa_num = self.valor_num + taxa_global_centavos
             valor_com_taxa_str = f"R$ {valor_com_taxa_num:.2f}".replace(".", ",")
             valor_base_str = f"R$ {self.valor_str}"
-            estilo_jogo_str = f"{mode1.capitalize()} ({self.modo_jogo})"
+            estilo_jogo_str = f"{modo_gelo.capitalize()} ({self.modo_jogo})"
 
             embed_partida = discord.Embed(
                 color=discord.Color.from_rgb(40, 160, 90)
@@ -911,8 +918,6 @@ class FilaView(discord.ui.View):
                 view=view_confirmacao
             )
         else:
-            # Caso não encontre alguém no mesmo modo, adiciona o jogador à fila de espera no painel
-            fila_jogadores.append((user, modo_gelo))
             embed_atualizado = criar_embed_fila(nome_fila=self.nome_fila, modo_jogo=self.modo_jogo, valor_aposta=f"R$ {self.valor_str}")
             try:
                 await interaction.message.edit(embed=embed_atualizado, view=self)
@@ -1048,6 +1053,7 @@ class SelectModoFila(discord.ui.Select):
             discord.SelectOption(label="3v3 - misto", value="3v3 - misto"),
             discord.SelectOption(label="4v4 - misto", value="4v4 - misto"),
             discord.SelectOption(label="1v1 - bate soco", value="1v1 - bate soco"),
+            discord.SelectOption(label="2v2 - bate soco", value="2v2 - bate soco"),
             discord.SelectOption(label="2v2 - bate soco", value="2v2 - bate soco"),
             discord.SelectOption(label="3v3 - bate soco", value="3v3 - bate soco"),
             discord.SelectOption(label="4v4 - bate soco", value="4v4 - bate soco"),
